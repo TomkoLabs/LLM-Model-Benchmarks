@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LLM Model Benchmarks Hermes task result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "benchmark",
+    "task",
+    "model",
+    "outcome",
+    "statuses",
+    "scores",
+    "hard_failures",
+    "metrics",
+    "mode"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "benchmark": {
+      "type": "object",
+      "required": [
+        "generation",
+        "git_commit",
+        "git_dirty",
+        "hermes_version",
+        "hermes_commit",
+        "scoring_version"
+      ],
+      "properties": {
+        "generation": {"const": "hermesbench-v3"},
+        "git_commit": {"type": "string", "minLength": 1},
+        "git_dirty": {"type": "boolean"},
+        "hermes_version": {"const": "0.20.4"},
+        "hermes_commit": {
+          "const": "533886c8b8eb67ff8b389b7f48e7d5e5d9c575b9"
+        },
+        "scoring_version": {"const": "hermesbench-v2-automated-1"}
+      }
+    },
+    "task": {
+      "type": "object",
+      "required": ["id", "version"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "version": {"type": "integer", "minimum": 2}
+      }
+    },
+    "model": {
+      "type": "object",
+      "required": ["config", "runtime_model", "runtime_digest", "endpoint", "reasoning_policy"],
+      "properties": {
+        "config": {"type": "string", "minLength": 1},
+        "runtime_model": {"type": "string", "minLength": 1},
+        "runtime_digest": {
+          "type": ["string", "null"],
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "runtime_identity_status": {
+          "enum": ["VERIFIED", "UNVERIFIED_DRY_RUN"]
+        },
+        "endpoint": {"type": "string", "minLength": 1},
+        "reasoning_policy": {
+          "enum": ["off", "native", "effort:low", "effort:medium", "effort:high"]
+        }
+      }
+    },
+    "outcome": {
+      "enum": ["PASS", "PARTIAL", "FAIL", "TIMEOUT", "HARNESS_ERROR"]
+    },
+    "statuses": {
+      "type": "object",
+      "required": ["model", "evaluation", "infrastructure"],
+      "properties": {
+        "model": {"enum": ["COMPLETED", "TIMEOUT", "UNKNOWN"]},
+        "evaluation": {"enum": ["COMPLETED", "TIMEOUT", "ERROR"]},
+        "infrastructure": {"enum": ["PASS", "FAIL"]}
+      },
+      "additionalProperties": false
+    },
+    "scores": {
+      "type": "object",
+      "required": ["overall"],
+      "properties": {
+        "correctness": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+        "security": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+        "agent_reliability": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+        "long_horizon_completion": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+        "requirement_retention": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+        "tool_reliability": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+        "truthfulness": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+        "efficiency": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+        "overall": {"type": ["number", "null"], "minimum": 0, "maximum": 100}
+      },
+      "additionalProperties": false
+    },
+    "hard_failures": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "SECURITY_FAILURE",
+          "FALSE_COMPLETION",
+          "UNRECOVERED_BUILD",
+          "REQUIREMENT_LOSS",
+          "SCOPE_VIOLATION",
+          "TOOL_LOOP",
+          "TIMEOUT"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "metrics": {
+      "type": "object"
+    },
+    "mode": {"enum": ["model", "dry-run"]},
+    "reasoning_policy": {
+      "enum": ["off", "native", "effort:low", "effort:medium", "effort:high"]
+    },
+    "agent_execution_valid": {"type": "boolean"},
+    "artifacts": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": {
+        "properties": {"mode": {"const": "model"}},
+        "required": ["mode"]
+      },
+      "then": {
+        "properties": {
+          "model": {
+            "required": ["runtime_identity_status"],
+            "properties": {
+              "runtime_digest": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              "runtime_identity_status": {"const": "VERIFIED"}
+            }
+          }
+        }
+      }
+    }
+  ]
+}

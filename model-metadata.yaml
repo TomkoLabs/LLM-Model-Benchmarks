@@ -1,0 +1,125 @@
+schema_version: 1
+
+# Public identity is keyed by the immutable runtime artifact, never by an alias.
+# To register another model, obtain its full sha256 digest and read-only runtime
+# metadata, add one complete entry here, and run the offline schema/tests. An
+# alias may occur under multiple digests because aliases can be repointed.
+models:
+  sha256:0218f872e86baa9c7610509f27db36a7bc52eea7afee24688f81ca74ffcb6c77:
+    canonical_name: Qwen3.6-35B-A3B
+    source_model: Qwen3.6-35B-A3B
+    source_url: null
+    version: "3.6"
+    parameter_variant: 36.0B
+    architecture: qwen35moe
+    quantization: Q8_0
+    source_filename: sha256-7d8298ddcbce81ae5b237e42cd551db8352cf362564caa826b5ded02041fdfeb
+    aliases:
+      - agent-main:latest
+    metadata_source: Operator canonical identity plus Ollama /api/tags and /api/show, observed 2026-08-26
+
+  sha256:3f68e12b44eea7c1f464501436bbbe67a8234bf2694efc1d7407ab3df73251b6:
+    canonical_name: Qwen3-Coder-Next
+    source_model: qwen3-coder-next:q8_0
+    source_url: null
+    version: Next
+    parameter_variant: 79.7B
+    architecture: qwen3next
+    quantization: Q8_0
+    source_filename: sha256-ab44d15ca172bc6204adb8fecb962811c9b801dccb8fadec3ccd451b557f6891
+    aliases:
+      - coder-max:latest
+    metadata_source: Operator canonical identity plus Ollama /api/tags and /api/show, observed 2026-08-26
+
+  sha256:0dbde7ee79ca3ede12b17811e23a4d18e9e61a5dfa261e831cd3f6cdeeaf1803:
+    canonical_name: Qwen3-Coder-Next
+    source_model: qwen3-coder-next:q8_0
+    source_url: null
+    version: Next
+    parameter_variant: 79.7B
+    architecture: qwen3next
+    quantization: Q8_0
+    source_filename: sha256-ab44d15ca172bc6204adb8fecb962811c9b801dccb8fadec3ccd451b557f6891
+    aliases:
+      - coder-max-128k:latest
+    metadata_source: Operator canonical identity plus Ollama /api/tags and /api/show, observed 2026-08-26
+
+  sha256:a951a23b46a1f6093dafee2ea481d634b4e31ac720a8a16f3f91e04f5a40ecd9:
+    canonical_name: GPT-OSS-120B
+    source_model: GPT-OSS-120B
+    source_url: null
+    version: 120B
+    parameter_variant: 116.8B
+    architecture: gptoss
+    quantization: MXFP4
+    source_filename: sha256-6be6d66a3f546d8c19b130dc41dc24b2fc159f84ffbc76a0ee0676205083cf5a
+    aliases:
+      - reviewer-deep:latest
+    metadata_source: Operator canonical identity plus Ollama /api/tags and /api/show, observed 2026-08-26
+
+  sha256:50197a047af0f7c198929eb80bbd4bb5a44cd43ca878f5241c846ffbf3ee9a7b:
+    canonical_name: Laguna-S-2.1-Uncensored APEX
+    source_model: Laguna-S-2.1-Uncensored APEX
+    source_url: null
+    version: "2.1"
+    parameter_variant: 117.6B
+    architecture: laguna
+    quantization: Q6_K
+    source_filename: sha256-20b856d48a63daa88c521a5bc861a47e3366c3f8cc27a3d0c81afef6a8e780c5
+    aliases:
+      - coder-uncens:latest
+    metadata_source: Operator canonical identity plus Ollama /api/tags and /api/show, observed 2026-08-26
+
+  sha256:ea34631ee5c00f9acd0182cb9503098e96c551e3841bf537bbc69a4576aea84b:
+    canonical_name: Laguna-S-2.1-Uncensored APEX
+    source_model: Laguna-S-2.1-Uncensored APEX
+    source_url: null
+    version: "2.1"
+    parameter_variant: 117.6B
+    architecture: laguna
+    quantization: Q6_K
+    source_filename: sha256-20b856d48a63daa88c521a5bc861a47e3366c3f8cc27a3d0c81afef6a8e780c5
+    aliases:
+      - coder-uncens-256k:latest
+    metadata_source: Operator canonical identity plus Ollama /api/tags and /api/show, observed 2026-08-26
+
+  sha256:91e5aee4586a37fda420039bfc30293371bab72026a06239e1183339caff2ae0:
+    canonical_name: Huihui Qwen3-Coder-Next Abliterated
+    source_model: huihui_ai/qwen3-coder-next-abliterated:q8_0
+    source_url: null
+    version: Next
+    parameter_variant: 79.7B
+    architecture: qwen3next
+    quantization: Q8_0
+    source_filename: sha256-6781db99684945a37493b705b6f44309e1961484ab8b2fd47e7b520b2d5194ea
+    aliases:
+      - coder-uncens-qwen:latest
+    metadata_source: Operator canonical identity plus Ollama /api/tags and /api/show, observed 2026-08-26
+
+  sha256:59c3de79a9d1198dd7065fe1431761274b0bd4fe3582c0c8b59ec044be9627ea:
+    canonical_name: Hermes-4-70B
+    source_model: Hermes-4-70B
+    source_url: null
+    version: "4"
+    parameter_variant: 70.6B
+    architecture: llama
+    quantization: Q4_K_M
+    source_filename: sha256-61a30a38d942e652cb08f84e54294d2c6438d606a2f24534e3e4bff516a7941a
+    aliases:
+      - hermes4-70b:latest
+    metadata_source: Operator canonical identity plus Ollama /api/tags and /api/show, observed 2026-08-26
+
+  sha256:4ab95509a27d7a3f23dcc612a660858e9f28c1a5322bd9240f34559bcf888988:
+    canonical_name: Qwen3.8
+    source_model: qwen3.8:27b-q8_0
+    source_url: null
+    version: "0814"
+    parameter_variant: 27.3B
+    architecture: qwen35
+    quantization: Q8_0
+    source_filename: sha256-2bb22714289826d7b9e0ba376c3ce47d08bce39abe598745857c44d88c09bdbf
+    aliases:
+      - qwen38-q8-262k:latest
+      - qwen38-q8-medium-262k
+      - qwen38-q8-medium-128k
+    metadata_source: Ollama /api/tags and /api/show, observed 2026-08-26

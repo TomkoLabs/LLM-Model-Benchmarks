@@ -1,0 +1,51 @@
+schema_version: 2
+
+benchmark_generation: hermesbench-v2
+
+hermes:
+  version: "0.20.4"
+  commit: "533886c8b8eb67ff8b389b7f48e7d5e5d9c575b9"
+  install: "~/.hermes/hermes-agent"
+
+baseline_runtime:
+  endpoint: "http://127.0.0.1:11434/v1"
+  runtime: ollama
+  ollama_version: "0.32.15"
+  max_loaded_models: 1
+
+observed_live_config:
+  agent_max_turns: 90
+  goals_max_turns: 30
+  compression_enabled: true
+  compression_threshold: 0.50
+  compression_target_ratio: 0.20
+  compression_protect_first_n: 3
+  compression_protect_last_n: 20
+  goal_judge_provider: main
+  goal_judge_model: "agent-main:latest"
+
+suite:
+  tasks:
+    - archiveguard-security-v1
+
+execution:
+  failure_policy: continue_model_failures_stop_infrastructure
+  evaluator_timeout_seconds: 300
+  evaluator_worker_sha256: bb4a1e219bb4b189f89d680f1649195c861080a862d9c1cf4471a4c14c6214a7
+  candidate_rpc_sha256: 752f1f57952b4bcfac608f25c8b02bad8f96d3192ee1099e161aebc7e007510d
+  scoring_version: hermesbench-v2-automated-1
+  tool_distribution: hermesbench_terminal_only
+  candidate_toolsets: [hermesbench_terminal_foreground]
+  candidate_isolation: trusted-shell-wrapper-bubblewrap-networkless
+  evaluator_isolation: nested-bubblewrap-networkless-test-blind-rpc
+  endpoint_redirects: reject
+
+required_before_live_runs:
+  - Resolve an exact sha256 runtime digest through /v1/models, /api/tags, and /api/show.
+  - If runtime_digest is configured as an expected value, require an exact match.
+
+policy:
+  update_hermes_during_v2: false
+  modify_web_stack: false
+  modify_browser_stack: false
+  delete_models: false

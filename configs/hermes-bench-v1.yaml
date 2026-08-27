@@ -1,0 +1,48 @@
+schema_version: 1
+
+benchmark_generation: hermesbench-v1
+
+hermes:
+  version: "0.20.4"
+  commit: "533886c8b8eb67ff8b389b7f48e7d5e5d9c575b9"
+  install: "~/.hermes/hermes-agent"
+
+baseline_runtime:
+  endpoint: "http://127.0.0.1:11434/v1"
+  runtime: ollama
+  ollama_version: "0.32.15"
+  max_loaded_models: 1
+
+observed_live_config:
+  agent_max_turns: 90
+  goals_max_turns: 30
+  compression_enabled: true
+  compression_threshold: 0.50
+  compression_target_ratio: 0.20
+  compression_protect_first_n: 3
+  compression_protect_last_n: 20
+  goal_judge_provider: main
+  goal_judge_model: "agent-main:latest"
+
+suite:
+  tasks:
+    - archiveguard-security-v1
+
+execution:
+  # A model-quality failure is scored and the next task runs. Infrastructure
+  # and harness failures stop the suite because later results may be invalid.
+  failure_policy: continue_model_failures_stop_infrastructure
+  evaluator_timeout_seconds: 300
+  scoring_version: hermesbench-v1-automated-1
+
+required_before_long_runs:
+  - Increase benchmark agent turn budget without changing unrelated live settings.
+  - Increase benchmark /goal turn budget above the observed 30-turn cap.
+  - Ensure goal judging uses the benchmark model or otherwise cannot cause model swapping.
+  - Record exact effective configuration for every run.
+
+policy:
+  update_hermes_during_v1: false
+  modify_web_stack: false
+  modify_browser_stack: false
+  delete_models: false

@@ -1,0 +1,3 @@
+# Copy to config/local.yaml (ignored by Git). The default is Ollama on the
+# same host. A numeric RFC1918 address is also accepted for a trusted LAN GX10.
+endpoint: http://127.0.0.1:11434/v1

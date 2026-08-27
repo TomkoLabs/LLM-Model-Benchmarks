@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LLM Model Benchmarks sanitized public leaderboard",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project",
+    "generated_at",
+    "generation_basis",
+    "source_run_selection",
+    "ranking_rule",
+    "result_scope",
+    "current_standard",
+    "source_run_ids",
+    "qualified",
+    "evaluated_not_qualified",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "project": {
+      "type": "object",
+      "required": ["name", "url"],
+      "properties": {
+        "name": {"const": "LLM Model Benchmarks"},
+        "url": {"const": "https://github.com/TomkoLabs/LLM-Model-Benchmarks"}
+      },
+      "additionalProperties": false
+    },
+    "generated_at": {"type": ["string", "null"]},
+    "generation_basis": {"type": "string", "minLength": 1},
+    "source_run_selection": {"type": "string", "minLength": 1},
+    "ranking_rule": {"type": "string", "minLength": 1},
+    "result_scope": {"type": "string", "minLength": 1},
+    "current_standard": {
+      "type": "object",
+      "required": [
+        "profile",
+        "qualification_generation",
+        "scoring_version",
+        "benchmark_track",
+        "reasoning_policy_rule",
+        "direct_probe_contract",
+        "direct_probe_max_tokens",
+        "compatibility_group",
+        "upstream_pin_set",
+        "upstream_pins"
+      ],
+      "properties": {
+        "profile": {"const": "standard"},
+        "qualification_generation": {"type": "string", "minLength": 1},
+        "scoring_version": {"type": "string", "minLength": 1},
+        "benchmark_track": {"type": "string", "minLength": 1},
+        "reasoning_policy_rule": {"type": "string", "minLength": 1},
+        "direct_probe_contract": {"type": "string", "minLength": 1},
+        "direct_probe_max_tokens": {"type": "integer", "minimum": 1},
+        "compatibility_group": {"type": "string", "pattern": "^group-[0-9a-f]{12}$"},
+        "upstream_pin_set": {"type": "string", "pattern": "^pins-[0-9a-f]{12}$"},
+        "upstream_pins": {
+          "type": "object",
+          "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+        }
+      },
+      "additionalProperties": false
+    },
+    "source_run_ids": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "qualified": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/scoredRow"}
+    },
+    "evaluated_not_qualified": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/scoredRow"}
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/diagnosticRow"}
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "nullableScore": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+    "identity": {
+      "type": "object",
+      "required": [
+        "status",
+        "display_name",
+        "canonical_name",
+        "source_model",
+        "source_url",
+        "version",
+        "parameter_variant",
+        "architecture",
+        "quantization",
+        "context_length",
+        "immutable_digest",
+        "runtime_variant"
+      ],
+      "properties": {
+        "status": {"const": "COMPLETE"},
+        "display_name": {"type": "string", "minLength": 1},
+        "canonical_name": {"type": "string", "minLength": 1},
+        "source_model": {"type": "string", "minLength": 1},
+        "source_url": {"type": ["string", "null"], "pattern": "^https://"},
+        "version": {"type": "string", "minLength": 1},
+        "parameter_variant": {"type": "string", "minLength": 1},
+        "architecture": {"type": "string", "minLength": 1},
+        "quantization": {"type": "string", "minLength": 1},
+        "context_length": {"type": "integer", "minimum": 1},
+        "immutable_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "runtime_variant": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "componentScores": {
+      "type": "object",
+      "required": ["coding", "hermes", "tool_instruction", "reliability", "performance"],
+      "properties": {
+        "coding": {"$ref": "#/$defs/nullableScore"},
+        "hermes": {"$ref": "#/$defs/nullableScore"},
+        "tool_instruction": {"$ref": "#/$defs/nullableScore"},
+        "reliability": {"$ref": "#/$defs/nullableScore"},
+        "performance": {"$ref": "#/$defs/nullableScore"}
+      },
+      "additionalProperties": false
+    },
+    "scoredRow": {
+      "type": "object",
+      "required": [
+        "rank",
+        "run_id",
+        "run_count",
+        "benchmark_date",
+        "started_at",
+        "completed_at",
+        "model_identity",
+        "runtime_alias",
+        "benchmark_track",
+        "reasoning_policy_selection_mode",
+        "reasoning_policy",
+        "profile",
+        "profile_version",
+        "scoring_version",
+        "outcome",
+        "result_validity",
+        "profile_decision",
+        "overall_score",
+        "component_scores",
+        "duration_seconds",
+        "hardware_runtime",
+        "upstream_pin_set"
+      ],
+      "properties": {
+        "rank": {"type": ["integer", "null"], "minimum": 1},
+        "run_id": {"type": "string", "minLength": 1},
+        "run_count": {"const": 1},
+        "benchmark_date": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        "started_at": {"type": "string", "minLength": 1},
+        "completed_at": {"type": ["string", "null"]},
+        "model_identity": {"$ref": "#/$defs/identity"},
+        "runtime_alias": {"type": ["string", "null"]},
+        "benchmark_track": {
+          "enum": ["primary-deployment", "controlled-policy", "historical"]
+        },
+        "reasoning_policy_selection_mode": {
+          "enum": ["configured", "explicit", "legacy-unspecified"]
+        },
+        "reasoning_policy": {"type": "string", "minLength": 1},
+        "profile": {"const": "standard"},
+        "profile_version": {"type": "string", "minLength": 1},
+        "scoring_version": {"type": "string", "minLength": 1},
+        "outcome": {"enum": ["QUALIFIED", "NOT_QUALIFIED"]},
+        "result_validity": {"const": "VALID"},
+        "profile_decision": {
+          "enum": ["MEETS_PROFILE", "DOES_NOT_MEET_PROFILE"]
+        },
+        "overall_score": {"$ref": "#/$defs/nullableScore"},
+        "component_scores": {"$ref": "#/$defs/componentScores"},
+        "duration_seconds": {"type": ["number", "null"], "minimum": 0},
+        "hardware_runtime": {"type": "string", "minLength": 1},
+        "upstream_pin_set": {"type": "string", "pattern": "^pins-[0-9a-f]{12}$"}
+      },
+      "additionalProperties": false
+    },
+    "diagnosticRow": {
+      "type": "object",
+      "required": [
+        "run_id",
+        "benchmark_date",
+        "status",
+        "qualification_outcome",
+        "result_validity",
+        "profile_decision",
+        "profile",
+        "profile_version",
+        "model_identity",
+        "runtime_alias",
+        "immutable_digest",
+        "benchmark_track",
+        "reasoning_policy_selection_mode",
+        "reasoning_policy",
+        "reason"
+      ],
+      "properties": {
+        "run_id": {"type": "string", "minLength": 1},
+        "benchmark_date": {"type": ["string", "null"]},
+        "status": {
+          "enum": ["METADATA_INCOMPLETE", "INFRA_ERROR", "INCOMPLETE", "INVALID", "SMOKE_ONLY", "INCOMPATIBLE", "UNRANKED", "QUARANTINED", "LEGACY_THINKING_CONTROL_MISMATCH"]
+        },
+        "qualification_outcome": {"type": ["string", "null"]},
+        "result_validity": {
+          "enum": ["VALID", "QUARANTINED", "INFRA_FAILURE", "INCOMPLETE"]
+        },
+        "profile_decision": {
+          "enum": ["MEETS_PROFILE", "DOES_NOT_MEET_PROFILE", "NOT_ASSESSED"]
+        },
+        "profile": {"type": ["string", "null"]},
+        "profile_version": {"type": ["string", "null"]},
+        "model_identity": {"type": ["string", "null"]},
+        "runtime_alias": {"type": ["string", "null"]},
+        "immutable_digest": {"type": ["string", "null"]},
+        "benchmark_track": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "reasoning_policy_selection_mode": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "reasoning_policy": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "reason": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,96 @@
+schema_version: 1
+generation: gx10-qualification-v1
+default_profile: standard
+
+thresholds:
+  aggregate: 70.0
+  coding: 60.0
+  hermes: 100.0
+  tool_instruction: 70.0
+  reliability: 80.0
+
+weights:
+  coding: 40
+  hermes: 30
+  tool_instruction: 15
+  reliability: 10
+  performance: 5
+
+profiles:
+  smoke:
+    expected_duration: 10-20 minutes
+    total_wall_seconds: 1800
+    inactivity_seconds: 600
+    spark: null
+    benchlocal:
+      - id: targeted
+        scenarios: [toolcall-15/TC-01, instructfollow-15/IF-01]
+        repeat: 1
+        timeout_per_case: 180
+    infermark:
+      contexts: {short: 128}
+      requests: 1
+      concurrency: [1]
+      max_tokens: 64
+      warmup: 0
+      timeout: 180
+    hermes_tasks: [harness-smoke-v1]
+
+  standard:
+    expected_duration: 45-120 minutes
+    total_wall_seconds: 10800
+    inactivity_seconds: 900
+    spark:
+      tier: challenge
+      repeats: 3
+      thinking: "off"
+      timeout: 900
+      skip_throughput: true
+    benchlocal:
+      - id: behavioral
+        mode: quick
+        repeat: 3
+        timeout_per_case: 300
+      - id: coding
+        pack: aider-polyglot-30
+        repeat: 1
+        sandboxed: true
+        timeout_per_case: 900
+    infermark:
+      contexts: {short: 256, medium: 4096}
+      requests: 3
+      concurrency: [1]
+      max_tokens: 128
+      warmup: 1
+      timeout: 300
+    hermes_tasks: [harness-smoke-v1, convergence-smoke-v1]
+
+  overnight:
+    expected_duration: 4-10 hours
+    total_wall_seconds: 43200
+    inactivity_seconds: 1200
+    spark:
+      tier: all
+      repeats: 3
+      thinking: "off"
+      timeout: 1200
+      skip_throughput: true
+    benchlocal:
+      - id: behavioral
+        mode: medium
+        repeat: 3
+        timeout_per_case: 420
+      - id: coding
+        pack: aider-polyglot-30
+        repeat: 3
+        sandboxed: true
+        timeout_per_case: 1200
+    infermark:
+      contexts: {short: 256, medium: 4096, long: 16384}
+      requests: 5
+      concurrency: [1, 2, 4]
+      max_tokens: 256
+      warmup: 1
+      timeout: 420
+    hermes_tasks:
+      [harness-smoke-v1, convergence-smoke-v1, archiveguard-security-v1]

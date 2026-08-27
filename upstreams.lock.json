@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "upstreams": {
+    "spark-bench": {
+      "url": "https://github.com/Weschera/spark-bench.git",
+      "commit": "364e6ecf684988b024cdd9b1ae1feb0e44342603",
+      "version": "methodology-v6.7.1",
+      "license": null,
+      "license_disposition": "external-pinned-invocation-only; repository has no LICENSE file at the pinned commit",
+      "checkout": ".state/upstreams/spark-bench",
+      "entrypoint": "spark_bench.py",
+      "python_dependencies": {
+        "playwright": "1.62.0",
+        "pyee": "13.0.0",
+        "greenlet": "3.5.5",
+        "typing_extensions": "4.16.0"
+      },
+      "system_browser": "/usr/bin/chromium",
+      "output_contract": "spark_bench.csv rows keyed by run_id/workload/metric plus run markers"
+    },
+    "benchlocal-cli": {
+      "url": "https://github.com/noonghunna/benchlocal-cli.git",
+      "commit": "47d1d66d678c893e6f2b6ff7aba448fcc6094e2d",
+      "version": "0.9.9",
+      "license": "MIT",
+      "license_file": "LICENSE",
+      "license_sha256": "0a4ea8b5e66c4e0ea04d36a3b3de3f48ce879b9874da12f7187a59023aa254d9",
+      "checkout": ".state/upstreams/benchlocal-cli",
+      "entrypoint": "benchlocal_cli.cli",
+      "output_contract": "RunResult JSON schema_version 1 with packs, totals, and incremental journal"
+    },
+    "infermark": {
+      "url": "https://github.com/stef41/infermark.git",
+      "commit": "f7216dfc5dd67e68dd023e94b389a641c7111eb3",
+      "version": "0.3.0",
+      "license": "Apache-2.0",
+      "license_file": "LICENSE",
+      "license_sha256": "846c7c3777ca504020757279d52a7c85316543d9eb92f90b089e42e574ac0927",
+      "checkout": ".state/upstreams/infermark",
+      "entrypoint": "infermark.cli",
+      "output_contract": "JSON report with config and per-concurrency latency/TTFT/ITL/throughput"
+    },
+    "spark-evals-reference": {
+      "url": "https://github.com/DanTup/spark-evals.git",
+      "commit": "4138b036a128f0f4a27c268194ace4fa15bcd6d4",
+      "license": null,
+      "license_disposition": "methodological-reference-only; no clear redistribution license found",
+      "integrated": false
+    },
+    "swe-bench-rig-reference": {
+      "url": "https://github.com/lobanov/swe-bench-rig.git",
+      "commit": "bda19fdc7dc88c0bf538fd8a60c922d6d67190cc",
+      "license": null,
+      "license_disposition": "optional-heavyweight-reference-only; no clear redistribution license found",
+      "integrated": false
+    }
+  }
+}

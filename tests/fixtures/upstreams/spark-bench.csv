@@ -1,0 +1,11 @@
+run_id,timestamp,tier,model,label,endpoint,topology,parallelism,context,batch,spec_decode,workload,metric,value,unit,notes
+fixture-run,2026-08-26T00:00:00,eval,qwen38-q8-262k:latest,fixture,http://127.0.0.1:11434/v1,test,1,,,,provenance,golden_gate,PASS,,
+fixture-run,2026-08-26T00:00:00,eval,qwen38-q8-262k:latest,fixture,http://127.0.0.1:11434/v1,test,1,,,,provenance,run_valid,PASS,,
+fixture-run,2026-08-26T00:00:00,eval,qwen38-q8-262k:latest,fixture,http://127.0.0.1:11434/v1,test,1,,,,provenance,quarantine,clean,,
+fixture-run,2026-08-26T00:00:00,eval,qwen38-q8-262k:latest,fixture,http://127.0.0.1:11434/v1,test,1,,,,provenance,methodology,v6.7.1-challenge,,
+fixture-run,2026-08-26T00:00:00,eval,qwen38-q8-262k:latest,fixture,http://127.0.0.1:11434/v1,test,1,,,,provenance,error_rate,0,percent,
+fixture-run,2026-08-26T00:00:00,eval,qwen38-q8-262k:latest,fixture,http://127.0.0.1:11434/v1,test,1,,,,provenance,repeats,3,count,
+fixture-run,2026-08-26T00:00:00,eval,qwen38-q8-262k:latest,fixture,http://127.0.0.1:11434/v1,test,1,,,,overall,truescore,82.5,score0-100,
+fixture-run,2026-08-26T00:00:00,eval,qwen38-q8-262k:latest,fixture,http://127.0.0.1:11434/v1,test,1,,,,overall,quality,80,score0-100,
+fixture-run,2026-08-26T00:00:00,eval,qwen38-q8-262k:latest,fixture,http://127.0.0.1:11434/v1,test,1,,,,overall,reliability,90,score0-100,
+fixture-run,2026-08-26T00:00:00,eval,qwen38-q8-262k:latest,fixture,http://127.0.0.1:11434/v1,test,1,,,,code,domain_quality,75,score0-100,

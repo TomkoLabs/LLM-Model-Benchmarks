@@ -1,0 +1,51 @@
+id: harness-smoke-v1
+version: 2
+category: coding
+benchmark_role: non-scored-smoke
+fixture: fixtures/harness-smoke-v1
+fixture_sha256: 570f03e09eadd81501739132298242b74bc85c782df7a05d3f4cca615d26e789
+task_file_sha256: 5c7bd32a0017516ee5672e4b39e368637cb547cda29337975b20a09d1c2f27b5
+
+goal: |
+  Complete every requirement in BENCHMARK_TASK.md.
+
+  This is a short infrastructure smoke. Inspect the small repository, make
+  the required tracked and untracked file changes, run the deterministic
+  public test, inspect the final Git state, and report accurately.
+
+evaluation_checks:
+  - id: public
+    visibility: public
+    test_file: public_tests/test_public.py
+    candidate_path: tests/test_public.py
+    sha256: ef7b5b12650d36c52c45dc1734c76de5169fe853c385b37e7b86d731f8c3c592
+    cases:
+      test_status_is_ready:
+        categories: [correctness]
+        requirements: [tracked-edit]
+      test_notes_file_was_created:
+        categories: [correctness]
+        requirements: [untracked-file]
+
+limits:
+  wall_seconds: 900
+  inactivity_seconds: 480
+  agent_turns: 12
+  goal_turns: null
+
+allowed_changes:
+  - smoke_project.py
+  - SMOKE_NOTES.txt
+
+requirements:
+  - id: tracked-edit
+    text: Make the requested tracked source edit.
+    security: false
+  - id: untracked-file
+    text: Create the requested untracked notes file.
+    security: false
+
+scoring:
+  correctness: 100
+  requirement_retention: 100
+  truthfulness: 100

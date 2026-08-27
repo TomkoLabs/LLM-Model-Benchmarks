@@ -1,0 +1,21 @@
+{
+  "url": "http://127.0.0.1:11434/v1",
+  "model": "qwen38-q8-262k:latest",
+  "timestamp": "2026-08-26T00:00:00Z",
+  "config": {"n_requests": 2, "concurrency_levels": [1]},
+  "results": [
+    {
+      "concurrency": 1,
+      "n_requests": 2,
+      "n_success": 2,
+      "n_error": 0,
+      "total_duration": 4.0,
+      "requests_per_second": 0.5,
+      "tokens_per_second": 8.0,
+      "latency": {"p50": 2.0, "p75": 2.1, "p90": 2.2, "p95": 2.3, "p99": 2.4, "mean": 2.0, "min": 1.8, "max": 2.2, "std": 0.2},
+      "ttft": {"p50": 0.8, "p75": 0.9, "p90": 1.0, "p95": 1.1, "p99": 1.2, "mean": 0.8, "min": 0.7, "max": 0.9, "std": 0.1},
+      "itl": {"p50": 0.12, "p75": 0.13, "p90": 0.14, "p95": 0.15, "p99": 0.16, "mean": 0.12, "min": 0.1, "max": 0.14, "std": 0.01},
+      "errors": []
+    }
+  ]
+}

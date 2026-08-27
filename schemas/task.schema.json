@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LLM Model Benchmarks Hermes task",
+  "type": "object",
+  "required": [
+    "id",
+    "version",
+    "category",
+    "fixture",
+    "fixture_sha256",
+    "task_file_sha256",
+    "goal",
+    "limits",
+    "allowed_changes",
+    "requirements",
+    "evaluation_checks",
+    "scoring"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]+$"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 2
+    },
+    "category": {
+      "enum": [
+        "coding",
+        "security",
+        "agent",
+        "long_horizon"
+      ]
+    },
+    "benchmark_role": {
+      "enum": ["scored", "non-scored-smoke"]
+    },
+    "fixture": {
+      "type": "string"
+    },
+    "fixture_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "task_file_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "goal": {
+      "type": "string"
+    },
+    "public_test_command": {
+      "type": ["string", "null"]
+    },
+    "harness_test_command": {
+      "type": ["string", "null"]
+    },
+    "evaluation_checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "visibility",
+          "test_file",
+          "sha256",
+          "cases"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          },
+          "visibility": {
+            "enum": ["public", "harness-controlled"]
+          },
+          "test_file": {
+            "type": "string",
+            "pattern": "^[^/].*\\.py$"
+          },
+          "candidate_path": {
+            "type": "string",
+            "pattern": "^[^/].*\\.py$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "cases": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {
+              "type": "object",
+              "required": ["categories", "requirements"],
+              "properties": {
+                "categories": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "enum": ["correctness", "security"]
+                  }
+                },
+                "requirements": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {"type": "string", "minLength": 1}
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {"visibility": {"const": "public"}},
+              "required": ["visibility"]
+            },
+            "then": {"required": ["candidate_path"]}
+          }
+        ]
+      }
+    },
+    "limits": {
+      "type": "object",
+      "required": ["wall_seconds", "agent_turns"],
+      "properties": {
+        "wall_seconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "agent_turns": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "goal_turns": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "inactivity_seconds": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "allowed_changes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[^/].*$"
+      }
+    },
+    "requirements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "text"],
+        "properties": {
+          "id": {"type": "string"},
+          "text": {"type": "string"},
+          "security": {"type": "boolean"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "scoring": {
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "correctness": {"type": "number", "minimum": 0, "maximum": 100},
+        "security": {"type": "number", "minimum": 0, "maximum": 100},
+        "agent_reliability": {"type": "number", "minimum": 0, "maximum": 100},
+        "long_horizon_completion": {"type": "number", "minimum": 0, "maximum": 100},
+        "requirement_retention": {"type": "number", "minimum": 0, "maximum": 100},
+        "tool_reliability": {"type": "number", "minimum": 0, "maximum": 100},
+        "truthfulness": {"type": "number", "minimum": 0, "maximum": 100},
+        "efficiency": {"type": "number", "minimum": 0, "maximum": 100}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

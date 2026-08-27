@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "run_id": "20260102T000000Z-model-b-standard",
+  "profile": "standard",
+  "outcome": "NOT_QUALIFIED",
+  "model": {
+    "requested": "model-b:latest",
+    "config_alias": "model-b",
+    "runtime_model": "model-b:latest",
+    "runtime_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "quantization": "Q4_K_M",
+    "context_length": 65536,
+    "reasoning_effort": "low"
+  },
+  "provenance": {
+    "started_at": "2026-01-02T00:00:00Z",
+    "finished_at": "2026-01-02T01:00:00Z",
+    "elapsed_seconds": 3600.0,
+    "status": "COMPLETE",
+    "model_config": {"provider": "gx10", "runtime": "ollama", "context_length": 65536},
+    "qualification_generation": "gx10-qualification-v2",
+    "scoring_version": "gx10-qualification-v2",
+    "profile_config": {"name": "standard", "total_wall_seconds": 18000},
+    "upstreams": {
+      "spark-bench": {"commit": "1111111111111111111111111111111111111111"},
+      "benchlocal-cli": {"commit": "2222222222222222222222222222222222222222"},
+      "infermark": {"commit": "3333333333333333333333333333333333333333"}
+    }
+  },
+  "components": {},
+  "gates": {"passed": false, "failures": ["coding threshold not met"]},
+  "scores": {
+    "deployment_configuration_score": 61.0,
+    "components": {
+      "coding": 45.0,
+      "hermes": 50.0,
+      "tool_instruction": 85.0,
+      "reliability": 90.0,
+      "performance": 60.0
+    },
+    "weights": {
+      "coding": 40,
+      "hermes": 30,
+      "tool_instruction": 15,
+      "reliability": 10,
+      "performance": 5
+    },
+    "executed_weight": 100,
+    "comparable_full_profile": true
+  },
+  "artifacts": {}
+}

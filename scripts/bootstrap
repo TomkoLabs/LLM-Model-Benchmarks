@@ -1,0 +1,39 @@
+#!/bin/sh
+set -eu
+
+ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
+HERMES_ROOT="${HERMES_AGENT_ROOT:-${HERMES_HOME:-$HOME/.hermes}/hermes-agent}"
+PY="${HERMES_BENCH_PYTHON:-$HERMES_ROOT/venv/bin/python}"
+EXPECTED_HERMES_COMMIT="533886c8b8eb67ff8b389b7f48e7d5e5d9c575b9"
+EXPECTED_HERMES_VERSION="0.20.4"
+
+fail() {
+    printf '%s\n' "bootstrap: $*" >&2
+    exit 2
+}
+
+for executable in /usr/bin/git /usr/bin/bwrap /usr/bin/chromium /usr/bin/python3; do
+    [ -x "$executable" ] || fail "missing required executable: $executable"
+done
+
+[ -d "$HERMES_ROOT/.git" ] || fail "Hermes Agent checkout not found: $HERMES_ROOT"
+[ -x "$PY" ] || fail "Hermes Python 3.11 runtime not found: $PY"
+[ -f "$HERMES_ROOT/batch_runner.py" ] || fail "Hermes batch runner not found: $HERMES_ROOT/batch_runner.py"
+
+"$PY" -c 'import jsonschema, yaml' 2>/dev/null || \
+    fail "Hermes Python is missing the required jsonschema or PyYAML module"
+
+actual_commit="$(/usr/bin/git -C "$HERMES_ROOT" rev-parse HEAD 2>/dev/null)" || \
+    fail "cannot read the Hermes Agent commit"
+[ "$actual_commit" = "$EXPECTED_HERMES_COMMIT" ] || \
+    fail "Hermes Agent must be checked out at $EXPECTED_HERMES_COMMIT"
+[ -z "$(/usr/bin/git -C "$HERMES_ROOT" status --porcelain)" ] || \
+    fail "Hermes Agent checkout must be clean"
+
+actual_version="$("$PY" -c 'import importlib.metadata; print(importlib.metadata.version("hermes-agent"))' 2>/dev/null)" || \
+    fail "cannot read the installed Hermes Agent version"
+[ "$actual_version" = "$EXPECTED_HERMES_VERSION" ] || \
+    fail "Hermes Agent version must be $EXPECTED_HERMES_VERSION"
+
+cd "$ROOT"
+exec "$ROOT/benchmark-model" --setup-only "$@"

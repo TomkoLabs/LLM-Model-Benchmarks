@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LLM Model Benchmarks aggregate run",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "status",
+    "benchmark",
+    "model",
+    "failure_policy",
+    "started_at",
+    "finished_at",
+    "elapsed_seconds_hermes_observed",
+    "planned_tasks",
+    "task_results",
+    "lifecycle",
+    "aggregate_score",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {"const": 2},
+    "run_id": {"type": "string", "minLength": 1},
+    "status": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "INCOMPLETE",
+        "INFRASTRUCTURE_FAILURE",
+        "INTERRUPTED"
+      ]
+    },
+    "benchmark": {
+      "type": "object",
+      "required": [
+        "generation",
+        "git_commit",
+        "git_dirty",
+        "hermes_version",
+        "hermes_commit",
+        "scoring_version"
+      ],
+      "properties": {
+        "generation": {"const": "hermesbench-v3"},
+        "git_dirty": {"type": "boolean"},
+        "hermes_version": {"const": "0.20.4"},
+        "hermes_commit": {
+          "const": "533886c8b8eb67ff8b389b7f48e7d5e5d9c575b9"
+        },
+        "scoring_version": {"const": "hermesbench-v2-automated-1"}
+      }
+    },
+    "model": {
+      "type": "object",
+      "required": ["config", "runtime_model", "runtime_digest", "endpoint"],
+      "properties": {
+        "runtime_digest": {
+          "type": ["string", "null"],
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "runtime_identity_status": {
+          "type": ["string", "null"],
+          "enum": ["VERIFIED", null]
+        }
+      }
+    },
+    "failure_policy": {
+      "const": "continue_model_failures_stop_infrastructure"
+    },
+    "started_at": {"type": "string", "minLength": 1},
+    "finished_at": {"type": "string", "minLength": 1},
+    "elapsed_seconds_hermes_observed": {
+      "type": "number",
+      "minimum": 0
+    },
+    "planned_tasks": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
+    "task_results": {
+      "type": "array",
+      "items": {"type": "object"}
+    },
+    "lifecycle": {
+      "type": "object",
+      "required": [
+        "phase",
+        "current_task",
+        "completed_tasks",
+        "active_task",
+        "last_transition_at"
+      ],
+      "properties": {
+        "phase": {"type": "string", "minLength": 1},
+        "current_task": {"type": ["string", "null"]},
+        "completed_tasks": {
+          "type": "array",
+          "items": {"type": "string"},
+          "uniqueItems": true
+        },
+        "active_task": {"type": ["object", "null"]},
+        "last_transition_at": {"type": "string", "minLength": 1}
+      }
+    },
+    "aggregate_score": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "artifacts": {"type": "object"}
+  },
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {"enum": ["PASS", "FAIL"]}
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "model": {
+            "required": ["runtime_identity_status"],
+            "properties": {
+              "runtime_digest": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              "runtime_identity_status": {"const": "VERIFIED"}
+            }
+          }
+        }
+      }
+    }
+  ]
+}

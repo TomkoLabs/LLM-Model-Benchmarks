@@ -1,0 +1,29 @@
+{
+  "schema_version": "1",
+  "runner_version": "0.9.9",
+  "endpoint": "http://127.0.0.1:11434/v1",
+  "model": "qwen38-q8-262k:latest",
+  "mode": "quick",
+  "started_at": "2026-08-26T00:00:00Z",
+  "finished_at": "2026-08-26T00:01:00Z",
+  "repeat": 1,
+  "packs": [
+    {
+      "pack_id": "toolcall-15",
+      "version": "1.0.1",
+      "upstream_commit": "fixture",
+      "scenario_count": 2,
+      "passed": 2,
+      "total": 2,
+      "score": 1.0,
+      "latency": {},
+      "skipped": false,
+      "status": "ok",
+      "warnings": [],
+      "thinking_enabled": false,
+      "variance": null,
+      "scenarios": []
+    }
+  ],
+  "totals": {"passed": 2, "total": 2, "score": 1.0}
+}

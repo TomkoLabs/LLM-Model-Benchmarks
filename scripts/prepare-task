@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+
+ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
+HERMES_ROOT="${HERMES_AGENT_ROOT:-${HERMES_HOME:-$HOME/.hermes}/hermes-agent}"
+PY="${HERMES_BENCH_PYTHON:-$HERMES_ROOT/venv/bin/python}"
+
+cd "$ROOT"
+exec "$PY" -m harness.workspace "$@"

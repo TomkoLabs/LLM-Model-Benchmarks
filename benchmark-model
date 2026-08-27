@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+
+ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+HERMES_ROOT="${HERMES_AGENT_ROOT:-${HERMES_HOME:-$HOME/.hermes}/hermes-agent}"
+PY="${HERMES_BENCH_PYTHON:-$HERMES_ROOT/venv/bin/python}"
+
+if [ ! -x "$PY" ]; then
+    printf '%s\n' "benchmark-model: Hermes Python not found: $PY" >&2
+    printf '%s\n' "Run ./scripts/bootstrap after installing the pinned Hermes Agent checkout." >&2
+    exit 2
+fi
+
+cd "$ROOT"
+export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
+
+exec "$PY" -m harness.qualification "$@"

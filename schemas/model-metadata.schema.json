@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LLM Model Benchmarks public model metadata registry",
+  "type": "object",
+  "required": ["schema_version", "models"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "models": {
+      "type": "object",
+      "patternProperties": {
+        "^sha256:[0-9a-f]{64}$": {
+          "type": "object",
+          "required": [
+            "canonical_name",
+            "source_model",
+            "version",
+            "parameter_variant",
+            "architecture",
+            "quantization",
+            "aliases"
+          ],
+          "properties": {
+            "canonical_name": {"type": "string", "minLength": 1},
+            "source_model": {"type": "string", "minLength": 1},
+            "source_url": {
+              "type": ["string", "null"],
+              "pattern": "^https://"
+            },
+            "version": {"type": "string", "minLength": 1},
+            "parameter_variant": {"type": "string", "minLength": 1},
+            "architecture": {"type": "string", "minLength": 1},
+            "quantization": {"type": "string", "minLength": 1},
+            "source_filename": {
+              "type": ["string", "null"],
+              "pattern": "^[^/\\\\]+$"
+            },
+            "aliases": {
+              "type": "array",
+              "items": {"type": "string", "minLength": 1},
+              "uniqueItems": true
+            },
+            "metadata_source": {"type": "string", "minLength": 1}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

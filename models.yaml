@@ -1,0 +1,220 @@
+schema_version: 3
+
+# These curated entries preserve known profiles, reasoning policies, and
+# operator-selected contexts. They take precedence over automatic runtime discovery, but are not
+# an allowlist: any other installed Ollama tag can be resolved read-only at run
+# time when its effective num_ctx is present in runtime metadata.
+models:
+  laguna-apex-128k:
+    display_name: Laguna-S-2.1-Uncensored APEX
+    provider: gx10
+    runtime: ollama
+    runtime_model: coder-uncens:latest
+    runtime_digest: null
+    quantization: existing-local
+    context_length: 131072
+    reasoning_effort: high
+    reasoning_policy: effort:high
+    supported_reasoning_policies: ["off", native, effort:high]
+    role: example-quality-profile
+    notes:
+      - A null runtime_digest resolves and records the installed digest at run time.
+
+  agent-main:latest:
+    display_name: Qwen3.6-35B-A3B — 36.0B — Q8_0 — 65536-token context
+    provider: gx10
+    runtime: ollama
+    runtime_model: agent-main:latest
+    runtime_digest: sha256:0218f872e86baa9c7610509f27db36a7bc52eea7afee24688f81ca74ffcb6c77
+    source_model: Qwen3.6-35B-A3B
+    source_version: "3.6"
+    architecture: qwen35moe
+    parameter_variant: 36.0B
+    parameter_count: 35951822704
+    quantization: Q8_0
+    context_length: 65536
+    native_context_length: 262144
+    reasoning_effort: medium
+    reasoning_policy: effort:medium
+    supported_reasoning_policies: ["off", native, effort:medium]
+    role: curated-runtime-profile
+    notes:
+      - Context is operator-configured; the runtime reports a 262144-token native maximum and no stored num_ctx.
+
+  coder-max:latest:
+    display_name: Qwen3-Coder-Next — 79.7B — Q8_0 — 65536-token context
+    provider: gx10
+    runtime: ollama
+    runtime_model: coder-max:latest
+    runtime_digest: sha256:3f68e12b44eea7c1f464501436bbbe67a8234bf2694efc1d7407ab3df73251b6
+    source_model: qwen3-coder-next:q8_0
+    source_version: Next
+    architecture: qwen3next
+    parameter_variant: 79.7B
+    parameter_count: 79674391296
+    quantization: Q8_0
+    context_length: 65536
+    native_context_length: 262144
+    reasoning_effort: medium
+    reasoning_policy: effort:medium
+    supported_reasoning_policies: ["off", native, effort:medium]
+    role: curated-runtime-profile
+    notes:
+      - Context is operator-configured; the runtime reports a 262144-token native maximum and no stored num_ctx.
+
+  coder-max-128k:latest:
+    display_name: Qwen3-Coder-Next — 79.7B — Q8_0 — 131072-token context
+    provider: gx10
+    runtime: ollama
+    runtime_model: coder-max-128k:latest
+    runtime_digest: sha256:0dbde7ee79ca3ede12b17811e23a4d18e9e61a5dfa261e831cd3f6cdeeaf1803
+    source_model: qwen3-coder-next:q8_0
+    source_version: Next
+    architecture: qwen3next
+    parameter_variant: 79.7B
+    parameter_count: 79674391296
+    quantization: Q8_0
+    context_length: 131072
+    native_context_length: 262144
+    reasoning_effort: medium
+    reasoning_policy: effort:medium
+    supported_reasoning_policies: ["off", native, effort:medium]
+    role: curated-runtime-profile
+
+  reviewer-deep:latest:
+    display_name: GPT-OSS-120B — 116.8B — MXFP4 — 65536-token context
+    provider: gx10
+    runtime: ollama
+    runtime_model: reviewer-deep:latest
+    runtime_digest: sha256:a951a23b46a1f6093dafee2ea481d634b4e31ac720a8a16f3f91e04f5a40ecd9
+    source_model: GPT-OSS-120B
+    source_version: 120B
+    architecture: gptoss
+    parameter_variant: 116.8B
+    parameter_count: 116829156672
+    quantization: MXFP4
+    context_length: 65536
+    native_context_length: 131072
+    reasoning_effort: medium
+    reasoning_policy: effort:medium
+    supported_reasoning_policies: [native, effort:low, effort:medium, effort:high]
+    role: curated-runtime-profile
+    notes:
+      - Context is operator-configured; the runtime reports a 131072-token native maximum and no stored num_ctx.
+
+  coder-uncens:latest:
+    display_name: Laguna-S-2.1-Uncensored APEX — 117.6B — Q6_K — 131072-token context
+    provider: gx10
+    runtime: ollama
+    runtime_model: coder-uncens:latest
+    runtime_digest: sha256:50197a047af0f7c198929eb80bbd4bb5a44cd43ca878f5241c846ffbf3ee9a7b
+    source_model: Laguna-S-2.1-Uncensored APEX
+    source_version: "2.1"
+    architecture: laguna
+    parameter_variant: 117.6B
+    parameter_count: 117561977600
+    quantization: Q6_K
+    context_length: 131072
+    native_context_length: 1048576
+    reasoning_effort: high
+    reasoning_policy: effort:high
+    supported_reasoning_policies: ["off", native, effort:high]
+    role: curated-runtime-profile
+
+  coder-uncens-256k:latest:
+    display_name: Laguna-S-2.1-Uncensored APEX — 117.6B — Q6_K — 262144-token context
+    provider: gx10
+    runtime: ollama
+    runtime_model: coder-uncens-256k:latest
+    runtime_digest: sha256:ea34631ee5c00f9acd0182cb9503098e96c551e3841bf537bbc69a4576aea84b
+    source_model: Laguna-S-2.1-Uncensored APEX
+    source_version: "2.1"
+    architecture: laguna
+    parameter_variant: 117.6B
+    parameter_count: 117561977600
+    quantization: Q6_K
+    context_length: 262144
+    native_context_length: 1048576
+    reasoning_effort: high
+    reasoning_policy: effort:high
+    supported_reasoning_policies: ["off", native, effort:high]
+    role: curated-runtime-profile
+
+  coder-uncens-qwen:latest:
+    display_name: Huihui Qwen3-Coder-Next Abliterated — 79.7B — Q8_0 — 131072-token context
+    provider: gx10
+    runtime: ollama
+    runtime_model: coder-uncens-qwen:latest
+    runtime_digest: sha256:91e5aee4586a37fda420039bfc30293371bab72026a06239e1183339caff2ae0
+    source_model: huihui_ai/qwen3-coder-next-abliterated:q8_0
+    source_version: Next
+    architecture: qwen3next
+    parameter_variant: 79.7B
+    parameter_count: 79674391296
+    quantization: Q8_0
+    context_length: 131072
+    native_context_length: 262144
+    reasoning_effort: medium
+    reasoning_policy: effort:medium
+    supported_reasoning_policies: ["off", native, effort:medium]
+    role: curated-runtime-profile
+
+  hermes4-70b:latest:
+    display_name: Hermes-4-70B — 70.6B — Q4_K_M — 65536-token context
+    provider: gx10
+    runtime: ollama
+    runtime_model: hermes4-70b:latest
+    runtime_digest: sha256:59c3de79a9d1198dd7065fe1431761274b0bd4fe3582c0c8b59ec044be9627ea
+    source_model: Hermes-4-70B
+    source_version: "4"
+    architecture: llama
+    parameter_variant: 70.6B
+    parameter_count: 70553706560
+    quantization: Q4_K_M
+    context_length: 65536
+    native_context_length: 131072
+    reasoning_effort: medium
+    reasoning_policy: effort:medium
+    supported_reasoning_policies: ["off", native, effort:medium]
+    role: curated-runtime-profile
+    notes:
+      - Context is operator-configured; the runtime reports a 131072-token native maximum and no stored num_ctx.
+
+  qwen38-q8-medium-262k:
+    display_name: Qwen3.8 0814 — 27.3B — Q8_0 — 262144-token context
+    provider: gx10
+    runtime: ollama
+    runtime_model: qwen38-q8-262k:latest
+    runtime_digest: sha256:4ab95509a27d7a3f23dcc612a660858e9f28c1a5322bd9240f34559bcf888988
+    source_model: qwen3.8:27b-q8_0
+    source_version: "0814"
+    architecture: qwen35
+    parameter_variant: 27.3B
+    quantization: Q8_0
+    context_length: 262144
+    reasoning_effort: medium
+    reasoning_policy: effort:medium
+    supported_reasoning_policies: ["off", native, effort:medium]
+    role: reproduced-standard-profile
+    default_for_runtime: true
+    notes:
+      - The immutable digest reproduces the existing completed standard result.
+
+  qwen38-q8-medium-128k:
+    display_name: Qwen3.8 0814 — 27.3B — Q8_0 — 131072-token context
+    provider: gx10
+    runtime: ollama
+    runtime_model: qwen38-q8-262k:latest
+    runtime_digest: sha256:4ab95509a27d7a3f23dcc612a660858e9f28c1a5322bd9240f34559bcf888988
+    source_model: qwen3.8:27b-q8_0
+    source_version: "0814"
+    architecture: qwen35
+    parameter_variant: 27.3B
+    quantization: Q8_0
+    context_length: 131072
+    reasoning_effort: medium
+    reasoning_policy: effort:medium
+    supported_reasoning_policies: ["off", native, effort:medium]
+    role: reproduced-128k-profile
+    notes:
+      - This profile shares weights with the 262K entry but freezes a 128K context.

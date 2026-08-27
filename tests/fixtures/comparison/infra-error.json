@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "run_id": "20260103T000000Z-model-c-standard",
+  "profile": "standard",
+  "outcome": "INFRA_ERROR",
+  "model": {
+    "requested": "model-c:latest",
+    "runtime_model": "model-c:latest"
+  },
+  "provenance": {
+    "started_at": "2026-01-03T00:00:00Z",
+    "finished_at": "2026-01-03T00:01:00Z",
+    "elapsed_seconds": 60.0,
+    "status": "INFRA_ERROR",
+    "infrastructure_error": "fixture infrastructure failure",
+    "qualification_generation": "gx10-qualification-v2",
+    "scoring_version": "gx10-qualification-v2",
+    "profile_config": {"name": "standard", "total_wall_seconds": 18000},
+    "upstreams": {
+      "spark-bench": {"commit": "1111111111111111111111111111111111111111"},
+      "benchlocal-cli": {"commit": "2222222222222222222222222222222222222222"},
+      "infermark": {"commit": "3333333333333333333333333333333333333333"}
+    }
+  },
+  "components": {},
+  "gates": {"passed": false, "failures": ["infrastructure error"]},
+  "scores": {
+    "deployment_configuration_score": null,
+    "components": {},
+    "weights": {
+      "coding": 40,
+      "hermes": 30,
+      "tool_instruction": 15,
+      "reliability": 10,
+      "performance": 5
+    },
+    "executed_weight": 0,
+    "comparable_full_profile": false
+  },
+  "artifacts": {}
+}
