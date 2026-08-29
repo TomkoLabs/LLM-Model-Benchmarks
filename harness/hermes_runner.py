@@ -158,6 +158,7 @@ def write_runtime_hermes_config(
     context_length: int,
     reasoning: str | None,
     max_turns: int,
+    runtime: str = "ollama",
     observed_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if (
@@ -184,13 +185,17 @@ def write_runtime_hermes_config(
     agent_config: dict[str, Any] = {"max_turns": max_turns}
     if reasoning is not None:
         agent_config["reasoning_effort"] = reasoning
-    config = {
-        "model": {
+    model_config: dict[str, Any] = {
             "default": model,
             "base_url": endpoint_identity(base_url),
             "context_length": context_length,
-            "ollama_num_ctx": context_length,
-        },
+    }
+    if runtime == "ollama":
+        model_config["ollama_num_ctx"] = context_length
+    elif runtime != "ds4":
+        raise ValueError(f"unsupported model runtime: {runtime}")
+    config = {
+        "model": model_config,
         "agent": agent_config,
         "compression": {
             "enabled": observed.get("compression_enabled", True),
@@ -221,13 +226,16 @@ def write_runtime_hermes_config(
         yaml.safe_dump(config, sort_keys=False),
         root=runtime_dir,
     )
-    return {
+    result = {
         "hermes_home": str(hermes_home),
         "config_path": str(config_path),
         "config_sha256": _artifact_sha256(config_path, runtime_dir),
         "context_length": context_length,
-        "ollama_num_ctx": context_length,
+        "runtime": runtime,
     }
+    if runtime == "ollama":
+        result["ollama_num_ctx"] = context_length
+    return result
 
 
 def write_runtime_http_policy(
@@ -991,6 +999,7 @@ def run_once(
     evaluator_timeout: int = DEFAULT_TIMEOUT_SECONDS,
     wall_timeout_seconds: float | None = None,
     state_callback: Callable[[dict[str, Any]], None] | None = None,
+    runtime: str = "ollama",
 ) -> dict[str, Any]:
     if wall_timeout_seconds is not None and wall_timeout_seconds <= 0:
         raise ValueError("wall_timeout_seconds must be positive")
@@ -1026,10 +1035,17 @@ def run_once(
         runtime_digest = (model_metadata or {}).get("runtime_digest")
         identity_status = (model_metadata or {}).get("runtime_identity_status")
 
+        expected_identity_status = (
+            "VERIFIED"
+            if runtime == "ollama"
+            else "VERIFIED_MODEL_ID_AND_CONFIGURED_ARTIFACTS"
+            if runtime == "ds4"
+            else None
+        )
         if not (
             isinstance(runtime_digest, str)
             and re.fullmatch(r"sha256:[0-9a-f]{64}", runtime_digest)
-            and identity_status == "VERIFIED"
+            and identity_status == expected_identity_status
         ):
             raise RuntimeError(
                 "live execution requires a preflight-verified full runtime digest"
@@ -1041,12 +1057,14 @@ def run_once(
             base_url,
             model,
             expected_digest=runtime_digest,
+            runtime_config={**(model_metadata or {}), "runtime": runtime},
         )
 
         if (
             verified_runtime_identity.get("runtime_model_digest")
             != runtime_digest
-            or verified_runtime_identity.get("identity_status") != "VERIFIED"
+            or verified_runtime_identity.get("identity_status")
+            != expected_identity_status
         ):
             raise RuntimeError("live runtime identity verification failed")
 
@@ -1100,6 +1118,7 @@ def run_once(
             context_length=context_length,
             reasoning=reasoning,
             max_turns=max_turns,
+            runtime=runtime,
             observed_config=(benchmark_metadata or {}).get(
                 "hermes_observed_live_config"
             ),
@@ -1138,6 +1157,7 @@ def run_once(
         "candidate": str(candidate),
         "runtime_dir": str(runtime_dir),
         "model": model,
+        "runtime": runtime,
         "reasoning": reasoning,
         "reasoning_policy": policy.value,
         "max_turns": max_turns,
@@ -1529,6 +1549,7 @@ def run_once(
         **(model_metadata or {}),
         "config": model_alias or model,
         "runtime_model": model,
+        "runtime": runtime,
         "runtime_digest": (model_metadata or {}).get("runtime_digest"),
         "endpoint": endpoint_identity(base_url),
         "reasoning_effort": reasoning,
@@ -1682,7 +1703,11 @@ def run_once(
             "api_reported_model_metrics": None,
             "context_enforcement": (
                 {
-                    "method": "run-local Hermes config and request num_ctx",
+                    "method": (
+                        "run-local Hermes config and request num_ctx"
+                        if runtime == "ollama"
+                        else "run-local Hermes context configuration"
+                    ),
                     **runtime_hermes_config,
                 }
                 if runtime_hermes_config

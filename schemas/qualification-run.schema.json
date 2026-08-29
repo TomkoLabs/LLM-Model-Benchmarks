@@ -28,6 +28,16 @@
     "model": {
       "type": "object",
       "properties": {
+        "runtime": {"enum": ["ollama", "ds4"]},
+        "runtime_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "runtime_version": {"type": "string", "minLength": 1},
+        "context_length": {"type": "integer", "minimum": 1},
+        "endpoint_api_mode": {"type": ["string", "null"]},
+        "capabilities": {"type": ["object", "null"]},
+        "deployment_artifacts": {"type": ["object", "null"]},
         "reasoning_policy": {
           "enum": ["off", "native", "effort:low", "effort:medium", "effort:high"]
         },
@@ -63,7 +73,12 @@
             "serialized_endpoint_controls"
           ],
           "properties": {
-            "contract": {"const": "ollama-reasoning-policy-v1"},
+            "contract": {
+              "enum": [
+                "ollama-reasoning-policy-v1",
+                "openai-reasoning-policy-v1"
+              ]
+            },
             "requested": {
               "enum": ["configured", "off", "native", "effort:low", "effort:medium", "effort:high"]
             },
@@ -78,7 +93,7 @@
             "cohort": {"type": "string", "minLength": 1},
             "serialized_endpoint_controls": {
               "type": "object",
-              "required": ["openai_chat_completions", "ollama_native_chat"],
+              "required": ["openai_chat_completions"],
               "properties": {
                 "openai_chat_completions": {"type": "object"},
                 "ollama_native_chat": {"type": "object"}
@@ -131,6 +146,63 @@
         "properties": {
           "model": {"required": ["reasoning_policy", "reasoning_cohort"]},
           "provenance": {"required": ["reasoning_policy"]}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "model": {
+            "properties": {"runtime": {"const": "ds4"}},
+            "required": ["runtime"]
+          }
+        },
+        "required": ["model"]
+      },
+      "then": {
+        "properties": {
+          "model": {
+            "required": [
+              "runtime_digest",
+              "runtime_version",
+              "context_length",
+              "endpoint_api_mode",
+              "capabilities",
+              "deployment_artifacts"
+            ],
+            "properties": {
+              "endpoint_api_mode": {"const": "openai-chat-completions"},
+              "capabilities": {
+                "type": "object",
+                "required": ["streaming", "tool_calls"],
+                "properties": {
+                  "streaming": {"const": true},
+                  "tool_calls": {"const": true}
+                },
+                "additionalProperties": true
+              },
+              "deployment_artifacts": {
+                "type": "object",
+                "required": [
+                  "base_gguf_sha256",
+                  "dspark_drafter_sha256",
+                  "dspark_enabled"
+                ],
+                "properties": {
+                  "base_gguf_sha256": {
+                    "type": "string",
+                    "pattern": "^sha256:[0-9a-f]{64}$"
+                  },
+                  "dspark_drafter_sha256": {
+                    "type": "string",
+                    "pattern": "^sha256:[0-9a-f]{64}$"
+                  },
+                  "dspark_enabled": {"const": true}
+                },
+                "additionalProperties": false
+              }
+            }
+          }
         }
       }
     }

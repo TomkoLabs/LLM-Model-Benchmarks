@@ -32,20 +32,21 @@ Real-work acceptance remains the final model-selection step.
 ## Release status
 
 This is a stable, frozen reference release. It has no active feature roadmap
-or promise of frequent upstream-pin updates. There are currently no rankable
-configured-policy v4 standard results; the published leaderboard retains
-successful and unsuccessful historical diagnostics for transparency. A valid
-`DOES_NOT_MEET_PROFILE` result describes one exact deployment and is not a
-universal judgment about its model family.
+or promise of frequent upstream-pin updates. The completed configured-policy
+GX10 v4 round ranks DeepSeek V4 Flash first because it met every hard gate.
+Ornith 1.5 Q8 remains visible as a valid `DOES_NOT_MEET_PROFILE` deployment;
+its 79.9 reliability score was below the 80.0 gate. Such a result describes one
+exact deployment and is not a universal judgment about its model family.
 
 ## Supported platform
 
-The model-serving baseline is one NVIDIA GB10/GX10-class system running Linux
-and Ollama `0.32.15`, with one model loaded at a time. The harness supports both
-co-location on that GX10 and the currently exercised split layout: a Linux
-controller runs this harness, Hermes Agent `0.20.4`, Bubblewrap, and Chromium
-against an explicitly configured numeric private-network GX10 endpoint. The
-same endpoint and fail-closed network policy apply in both layouts.
+The model-serving baseline is one NVIDIA GB10/GX10-class system running Linux,
+with one model deployment active at a time. Curated deployments may use Ollama
+or the DS4 OpenAI-compatible adapter. The harness supports both co-location on
+that GX10 and the currently exercised split layout: a Linux controller runs
+this harness, Hermes Agent `0.20.4`, Bubblewrap, and Chromium against an
+explicitly configured numeric private-network GX10 endpoint. The same endpoint
+and fail-closed network policy apply in both layouts.
 
 Other Linux systems and private OpenAI-compatible deployments may work, but
 their results describe those deployments and should not be compared with the
@@ -58,10 +59,11 @@ Bubblewrap.
 
 - A clean Git checkout and an unprivileged Linux user with user namespaces
   enabled.
-- An already-installed Ollama model. The benchmark never pulls, removes,
-  renames, loads, or changes a model.
-- An Ollama endpoint exposing `/v1/models`, `/v1/chat/completions`,
-  `/api/tags`, `/api/show`, and `/api/version`.
+- An already-installed model deployment. The benchmark never pulls, removes,
+  renames, loads, starts, stops, or changes a model.
+- Either an Ollama endpoint exposing `/v1/models`, `/v1/chat/completions`,
+  `/api/tags`, `/api/show`, and `/api/version`, or a curated DS4 endpoint
+  exposing `/v1/models` and `/v1/chat/completions`.
 - curl, Git, Bubblewrap at `/usr/bin/bwrap`, Chromium at `/usr/bin/chromium`, and
   system Python at `/usr/bin/python3`.
 - Hermes Agent `0.20.4` at commit
@@ -148,6 +150,15 @@ configuration. If neither `/api/show` parameters nor its Modelfile contains a
 trustworthy `num_ctx`, the command stops with that single missing-field error;
 it never guesses from the native checkpoint maximum or from the alias name.
 
+Curated deployments may instead select the `ds4` runtime adapter. That adapter
+uses only `/v1/models` and `/v1/chat/completions`; it never sends Ollama-native
+requests. DS4 entries freeze the installed runtime version, configured context,
+base GGUF and DSpark drafter checksums, DSpark state, API mode, reasoning
+control, and streaming/tool-call capabilities. The runner records that
+provenance with the endpoint-reported exact model identifier. It does not
+start, stop, or switch model engines automatically; operators must establish
+the intended runtime before preflight.
+
 `models.yaml` schema v3 remains the higher-precedence home for curated run-local
 contexts, explicit reasoning policies, supported policies, and frozen
 reproduction profiles. Public model identity lives
@@ -195,7 +206,8 @@ completion ceiling under `gx10-direct-probe-v1`, regardless of model or
 reasoning policy. The runner does not adapt that ceiling or retry truncation.
 It still requires the exact visible answer and exact structured tool call, and
 records both the ceiling and actual completion-token usage in provenance and
-the report.
+the report. Reasoning fields remain separate evidence, while visible `<think>`
+tags are classified as contamination under every policy.
 
 ## Run one model
 
@@ -327,11 +339,12 @@ and never silently replace the primary ranking.
 The current `gx10-qualification-v4` profile routes every inference request
 through a trusted loopback gateway. It applies the one effective policy,
 removes conflicting legacy fields, and observes JSON/SSE response-field
-presence without retaining prompt or response content. For `off`, it serializes
-`reasoning_effort: none` on `/v1/chat/completions` and `think: false` on native
-`/api/chat`; `native` omits a forcing field, and `effort:<level>` serializes the
-exact curated level. V2 and v3 results remain unchanged historical cohorts; v2
-thinking-control results remain explicitly labeled
+presence without retaining prompt or response content. For `off`, both adapters
+serialize `reasoning_effort: none` on `/v1/chat/completions`; the Ollama adapter
+also serializes `think: false` on native `/api/chat`. `native` omits a forcing
+field, and `effort:<level>` serializes the exact curated level. V2 and v3
+results remain unchanged historical cohorts; v2 thinking-control results
+remain explicitly labeled
 `LEGACY_THINKING_CONTROL_MISMATCH`.
 
 Every completed benchmark command performs this same finalization after its

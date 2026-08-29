@@ -6,6 +6,7 @@ from typing import Any, Mapping
 
 
 REASONING_POLICY_CONTRACT = "ollama-reasoning-policy-v1"
+OPENAI_REASONING_POLICY_CONTRACT = "openai-reasoning-policy-v1"
 PRIMARY_DEPLOYMENT_TRACK = "primary-deployment"
 CONTROLLED_POLICY_TRACK = "controlled-policy"
 CONFIGURED_POLICY_RULE = "configured-per-model"
@@ -143,6 +144,37 @@ def ollama_reasoning_control(
     raise ReasoningPolicyError(f"unsupported Ollama API mode: {api_mode}")
 
 
+def reasoning_policy_contract(runtime: str) -> str:
+    if runtime == "ollama":
+        return REASONING_POLICY_CONTRACT
+    if runtime == "ds4":
+        return OPENAI_REASONING_POLICY_CONTRACT
+    raise ReasoningPolicyError(f"unsupported model runtime: {runtime}")
+
+
+def runtime_reasoning_control(
+    runtime: str,
+    api_mode: str,
+    policy: ReasoningPolicy,
+) -> dict[str, Any]:
+    """Return the exact supported control for one runtime/API boundary."""
+
+    if runtime == "ollama":
+        return ollama_reasoning_control(api_mode, policy)
+    if runtime == "ds4":
+        if api_mode != "openai-chat-completions":
+            raise ReasoningPolicyError(
+                "DS4 supports only the OpenAI chat-completions API mode"
+            )
+        if policy.mode == "off":
+            return {"reasoning_effort": "none"}
+        if policy.mode == "effort":
+            return {"reasoning_effort": policy.effort}
+        if policy.mode == "native":
+            return {}
+    raise ReasoningPolicyError(f"unsupported model runtime: {runtime}")
+
+
 def _remove_nested_controls(
     payload: dict[str, Any], key: str, fields: tuple[str, ...], removed: list[str]
 ) -> None:
@@ -160,7 +192,8 @@ def _remove_nested_controls(
         payload.pop(key, None)
 
 
-def normalize_ollama_request(
+def normalize_model_request(
+    runtime: str,
     api_mode: str,
     payload: Mapping[str, Any],
     policy: ReasoningPolicy,
@@ -185,11 +218,12 @@ def normalize_ollama_request(
         ("enable_thinking", "reasoning", "reasoning_effort", "think"),
         removed,
     )
-    control = ollama_reasoning_control(api_mode, policy)
+    control = runtime_reasoning_control(runtime, api_mode, policy)
     normalized.update(control)
     field = next(iter(control), None)
     return normalized, {
-        "contract": REASONING_POLICY_CONTRACT,
+        "contract": reasoning_policy_contract(runtime),
+        "runtime": runtime,
         "requested_reasoning_policy": policy.value,
         "reasoning_cohort": policy.cohort,
         "api_mode": api_mode,
@@ -198,6 +232,23 @@ def normalize_ollama_request(
         "conflicting_fields_removed": sorted(removed),
         "legacy_enable_thinking_present": "enable_thinking" in normalized,
     }
+
+
+def normalize_ollama_request(
+    api_mode: str,
+    payload: Mapping[str, Any],
+    policy: ReasoningPolicy,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Backward-compatible Ollama request normalization entry point."""
+
+    return normalize_model_request("ollama", api_mode, payload, policy)
+
+
+def visible_reasoning_tag_present(content: Any) -> bool:
+    if not isinstance(content, str):
+        return False
+    normalized = content.casefold()
+    return "<think>" in normalized or "</think>" in normalized
 
 
 def response_field_presence(response: Mapping[str, Any]) -> dict[str, Any]:
@@ -227,6 +278,7 @@ def response_field_presence(response: Mapping[str, Any]) -> dict[str, Any]:
         "reasoning_content_returned": bool(reasoning),
         "visible_content_returned": isinstance(content, str) and bool(content.strip()),
         "tool_call_returned": isinstance(calls, list) and bool(calls),
+        "visible_reasoning_tag_returned": visible_reasoning_tag_present(content),
         "finish_reason": finish_reason if isinstance(finish_reason, str) else None,
     }
 
@@ -249,9 +301,12 @@ def classify_direct_response(
     content = message.get("content")
     content = content.strip() if isinstance(content, str) else ""
     reasoning = presence["reasoning_content_returned"]
+    visible_reasoning_tag = presence["visible_reasoning_tag_returned"]
 
     if expected_content is not None:
-        if reasoning and presence["finish_reason"] == "length" and not content:
+        if visible_reasoning_tag:
+            classification = "VISIBLE_REASONING_TAG_CONTAMINATION"
+        elif reasoning and presence["finish_reason"] == "length" and not content:
             classification = "TRUNCATED_BEFORE_ANSWER"
         elif reasoning and not content:
             classification = "REASONING_ONLY"
@@ -292,7 +347,9 @@ def classify_direct_response(
                 name == expected_tool_name
                 and arguments == expected_tool_arguments
             )
-    if reasoning and presence["finish_reason"] == "length" and not calls:
+    if visible_reasoning_tag:
+        classification = "VISIBLE_REASONING_TAG_CONTAMINATION"
+    elif reasoning and presence["finish_reason"] == "length" and not calls:
         classification = "TRUNCATED_BEFORE_TOOL_CALL"
     elif reasoning and not calls:
         classification = "REASONING_ONLY"

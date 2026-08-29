@@ -137,6 +137,14 @@ A configuration identifies:
 - KV-cache format where observable
 - sampling values where explicitly controlled
 
+The Ollama adapter discovers identity through `/v1/models`, `/api/tags`, and
+`/api/show`. The DS4 adapter is OpenAI-compatible and is restricted to
+`/v1/models` and `/v1/chat/completions`; its immutable deployment provenance is
+the exact model identifier plus the curated DS4 version, configured context,
+base GGUF checksum, DSpark drafter checksum and enabled state. Runtime adapters
+do not change tasks, scoring, gates, or the `gx10-qualification-v4`
+compatibility key.
+
 Changing reasoning policy, quantization, or context creates a distinct complete
 deployment configuration. Curated configurations selected with `configured`
 share the primary deployment ranking; explicit policy selections remain
@@ -178,7 +186,9 @@ calls, and unexpected reasoning contamination separately. Reasoning is never
 promoted into visible content or interpreted as a tool call. If a model returns
 reasoning after a correctly serialized thinking-off request, that is a valid
 model/deployment contract failure; construction, translation, transport, or
-endpoint failures remain infrastructure failures.
+endpoint failures remain infrastructure failures. Visible `<think>` or
+`</think>` tags are reasoning contamination under all reasoning policies,
+including policies where separate reasoning fields are permitted.
 
 The `gx10-direct-probe-v1` contract gives each direct response probe and each
 direct tool-call probe the same fixed total completion allowance of 1,024

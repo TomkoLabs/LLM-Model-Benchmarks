@@ -62,7 +62,11 @@
           "pattern": "^sha256:[0-9a-f]{64}$"
         },
         "runtime_identity_status": {
-          "enum": ["VERIFIED", "UNVERIFIED_DRY_RUN"]
+          "enum": [
+            "VERIFIED",
+            "VERIFIED_MODEL_ID_AND_CONFIGURED_ARTIFACTS",
+            "UNVERIFIED_DRY_RUN"
+          ]
         },
         "endpoint": {"type": "string", "minLength": 1},
         "reasoning_policy": {
@@ -142,7 +146,12 @@
                 "type": "string",
                 "pattern": "^sha256:[0-9a-f]{64}$"
               },
-              "runtime_identity_status": {"const": "VERIFIED"}
+              "runtime_identity_status": {
+                "enum": [
+                  "VERIFIED",
+                  "VERIFIED_MODEL_ID_AND_CONFIGURED_ARTIFACTS"
+                ]
+              }
             }
           }
         }

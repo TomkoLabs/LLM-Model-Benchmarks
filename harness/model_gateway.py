@@ -11,17 +11,19 @@ from urllib.parse import urlsplit
 
 from harness.endpoints import LocalEndpoint, validate_local_openai_endpoint
 from harness.reasoning_policy import (
-    REASONING_POLICY_CONTRACT,
     ReasoningPolicy,
     ReasoningPolicyError,
     endpoint_api_mode,
-    normalize_ollama_request,
-    ollama_reasoning_control,
+    normalize_model_request,
     parse_reasoning_policy,
+    reasoning_policy_contract,
+    runtime_reasoning_control,
+    visible_reasoning_tag_present,
 )
 
 
 MODEL_TRANSPORT_CONTRACT = "ollama-model-transport-v1"
+OPENAI_MODEL_TRANSPORT_CONTRACT = "openai-model-transport-v1"
 MAX_REQUEST_BYTES = 64 * 1024 * 1024
 MAX_JSON_RESPONSE_BYTES = 16 * 1024 * 1024
 MAX_OBSERVATION_BYTES = 64 * 1024 * 1024
@@ -33,6 +35,7 @@ ALLOWED_PATHS = {
     "/api/tags",
     "/api/version",
 }
+DS4_ALLOWED_PATHS = {"/v1/models", "/v1/chat/completions"}
 
 
 class ModelGatewayError(RuntimeError):
@@ -61,9 +64,12 @@ def _response_presence(value: Mapping[str, Any]) -> dict[str, Any]:
     elif value.get("done") is True and finish is None:
         finish = "done"
 
-    visible = reasoning = tools = False
+    visible = reasoning = tools = visible_reasoning_tag = False
     for candidate in candidates:
         visible = visible or bool(candidate.get("content"))
+        visible_reasoning_tag = visible_reasoning_tag or visible_reasoning_tag_present(
+            candidate.get("content")
+        )
         reasoning = reasoning or any(
             bool(candidate.get(key))
             for key in ("reasoning", "reasoning_content", "thinking")
@@ -73,8 +79,25 @@ def _response_presence(value: Mapping[str, Any]) -> dict[str, Any]:
         "visible_content_returned": visible,
         "reasoning_content_returned": reasoning,
         "tool_call_returned": tools,
+        "visible_reasoning_tag_returned": visible_reasoning_tag,
         "finish_reason": finish,
     }
+
+
+def model_transport_contract(runtime: str) -> str:
+    if runtime == "ollama":
+        return MODEL_TRANSPORT_CONTRACT
+    if runtime == "ds4":
+        return OPENAI_MODEL_TRANSPORT_CONTRACT
+    raise ModelGatewayError(f"unsupported model runtime: {runtime}")
+
+
+def allowed_paths(runtime: str) -> set[str]:
+    if runtime == "ollama":
+        return ALLOWED_PATHS
+    if runtime == "ds4":
+        return DS4_ALLOWED_PATHS
+    raise ModelGatewayError(f"unsupported model runtime: {runtime}")
 
 
 class _ResponseObserver:
@@ -84,6 +107,8 @@ class _ResponseObserver:
         self.visible = False
         self.reasoning = False
         self.tools = False
+        self.visible_reasoning_tag = False
+        self._visible_tail = ""
         self.finish_reasons: set[str] = set()
         self.done_marker = False
         self.parser_errors: list[str] = []
@@ -100,6 +125,31 @@ class _ResponseObserver:
         self.visible = self.visible or presence["visible_content_returned"]
         self.reasoning = self.reasoning or presence["reasoning_content_returned"]
         self.tools = self.tools or presence["tool_call_returned"]
+        self.visible_reasoning_tag = (
+            self.visible_reasoning_tag
+            or presence["visible_reasoning_tag_returned"]
+        )
+        choices = value.get("choices")
+        if isinstance(choices, list):
+            for choice in choices:
+                if not isinstance(choice, Mapping):
+                    continue
+                for key in ("message", "delta"):
+                    candidate = choice.get(key)
+                    content = (
+                        candidate.get("content")
+                        if isinstance(candidate, Mapping)
+                        else None
+                    )
+                    if isinstance(content, str):
+                        self._visible_tail = (self._visible_tail + content)[-64:]
+        message = value.get("message")
+        if isinstance(message, Mapping) and isinstance(message.get("content"), str):
+            self._visible_tail = (self._visible_tail + message["content"])[-64:]
+        self.visible_reasoning_tag = (
+            self.visible_reasoning_tag
+            or visible_reasoning_tag_present(self._visible_tail)
+        )
         finish = presence["finish_reason"]
         if isinstance(finish, str):
             self.finish_reasons.add(finish)
@@ -177,6 +227,7 @@ class _ResponseObserver:
             "visible_content_returned": self.visible,
             "reasoning_content_returned": self.reasoning,
             "tool_call_returned": self.tools,
+            "visible_reasoning_tag_returned": self.visible_reasoning_tag,
             "finish_reasons": sorted(self.finish_reasons),
             "finish_state_returned": bool(self.finish_reasons or self.done_marker),
             "stream_done_marker": self.done_marker,
@@ -228,7 +279,7 @@ class _GatewayHandler(BaseHTTPRequestHandler):
             self._error(400, "query and fragment are not permitted")
             return
         path = parsed_path.path.rstrip("/") or "/"
-        if path not in ALLOWED_PATHS:
+        if path not in allowed_paths(gateway.runtime):
             self._error(404, "path is outside the model gateway allowlist")
             return
         try:
@@ -249,8 +300,8 @@ class _GatewayHandler(BaseHTTPRequestHandler):
         if api_mode is not None:
             try:
                 payload = json.loads(body.decode("utf-8"))
-                normalized, metadata = normalize_ollama_request(
-                    api_mode, payload, gateway.policy
+                normalized, metadata = normalize_model_request(
+                    gateway.runtime, api_mode, payload, gateway.policy
                 )
                 body = json.dumps(
                     normalized,
@@ -379,12 +430,15 @@ class ModelGateway:
         stage: str,
         observations_path: Path,
         upstream_timeout: float,
+        runtime: str = "ollama",
     ) -> None:
         self.target = validate_local_openai_endpoint(target_base_url)
         self.policy = policy
         self.stage = stage
         self.observations_path = observations_path
         self.upstream_timeout = upstream_timeout
+        model_transport_contract(runtime)
+        self.runtime = runtime
         self._lock = threading.Lock()
         self._request_counter = 0
         self._server: _GatewayServer | None = None
@@ -401,13 +455,14 @@ class ModelGateway:
     def metadata(self) -> dict[str, Any]:
         endpoint = self.endpoint
         return {
-            "contract": MODEL_TRANSPORT_CONTRACT,
-            "reasoning_policy_contract": REASONING_POLICY_CONTRACT,
+            "contract": model_transport_contract(self.runtime),
+            "reasoning_policy_contract": reasoning_policy_contract(self.runtime),
+            "runtime": self.runtime,
             "stage": self.stage,
             "boundary": endpoint.base_url,
             "target": self.target.base_url,
             "target_policy": "fixed configured local endpoint",
-            "allowed_paths": sorted(ALLOWED_PATHS),
+            "allowed_paths": sorted(allowed_paths(self.runtime)),
             "secrets_recorded": False,
             "request_content_recorded": False,
             "response_content_recorded": False,
@@ -438,7 +493,8 @@ class ModelGateway:
         self._append(
             {
                 "event": "request",
-                "transport_contract": MODEL_TRANSPORT_CONTRACT,
+                "transport_contract": model_transport_contract(self.runtime),
+                "runtime": self.runtime,
                 "stage": self.stage,
                 "request_id": request_id,
                 "endpoint_path": path,
@@ -460,7 +516,8 @@ class ModelGateway:
         self._append(
             {
                 "event": "response",
-                "transport_contract": MODEL_TRANSPORT_CONTRACT,
+                "transport_contract": model_transport_contract(self.runtime),
+                "runtime": self.runtime,
                 "stage": self.stage,
                 "request_id": request_id,
                 "endpoint_path": path,
@@ -474,7 +531,8 @@ class ModelGateway:
         self._append(
             {
                 "event": "observer_error",
-                "transport_contract": MODEL_TRANSPORT_CONTRACT,
+                "transport_contract": model_transport_contract(self.runtime),
+                "runtime": self.runtime,
                 "stage": self.stage,
                 "api_mode": api_mode,
                 "error": error,
@@ -581,21 +639,31 @@ def read_model_transport_observations(path: Path) -> dict[str, Any]:
     )
     invalid_contract_rows = 0
     for row in requests + responses + observer_errors:
-        invalid = row.get("transport_contract") != MODEL_TRANSPORT_CONTRACT
+        runtime = str(row.get("runtime") or "ollama")
+        try:
+            expected_transport_contract = model_transport_contract(runtime)
+            expected_reasoning_contract = reasoning_policy_contract(runtime)
+        except (ModelGatewayError, ReasoningPolicyError):
+            invalid = True
+            expected_transport_contract = None
+            expected_reasoning_contract = None
+        else:
+            invalid = row.get("transport_contract") != expected_transport_contract
         if row.get("event") == "request":
             try:
                 policy = parse_reasoning_policy(
                     str(row["requested_reasoning_policy"])
                 )
                 api_mode = str(row["api_mode"])
-                control = ollama_reasoning_control(api_mode, policy)
+                control = runtime_reasoning_control(runtime, api_mode, policy)
                 field = next(iter(control), None)
             except (KeyError, ReasoningPolicyError):
                 invalid = True
             else:
                 invalid = invalid or any(
                     (
-                        row.get("contract") != REASONING_POLICY_CONTRACT,
+                        row.get("contract") != expected_reasoning_contract,
+                        str(row.get("runtime") or "ollama") != runtime,
                         row.get("reasoning_cohort") != policy.cohort,
                         endpoint_api_mode(str(row.get("endpoint_path")))
                         != api_mode,
@@ -631,9 +699,25 @@ def read_model_transport_observations(path: Path) -> dict[str, Any]:
         )
     )
     observer_ok = request_observer_ok and not missing_response_ids
+    runtimes = sorted(
+        {
+            str(row.get("runtime") or "ollama")
+            for row in requests + responses
+        }
+    )
+    runtime = runtimes[0] if len(runtimes) == 1 else None
     return {
-        "contract": MODEL_TRANSPORT_CONTRACT,
-        "reasoning_policy_contract": REASONING_POLICY_CONTRACT,
+        "contract": (
+            model_transport_contract(runtime)
+            if isinstance(runtime, str)
+            else None
+        ),
+        "reasoning_policy_contract": (
+            reasoning_policy_contract(runtime)
+            if isinstance(runtime, str)
+            else None
+        ),
+        "runtime": runtime,
         "requested_reasoning_policy": policies[0] if len(policies) == 1 else None,
         "request_count": len(requests),
         "response_count": len(responses),
@@ -647,6 +731,10 @@ def read_model_transport_observations(path: Path) -> dict[str, Any]:
         ),
         "tool_call_returned": any(
             row.get("tool_call_returned") is True for row in responses
+        ),
+        "visible_reasoning_tag_returned": any(
+            row.get("visible_reasoning_tag_returned") is True
+            for row in responses
         ),
         "finish_state_returned": any(
             row.get("finish_state_returned") is True for row in responses
@@ -688,9 +776,24 @@ def combine_model_transport_observations(
         for row in rows
         if isinstance(row.get("requested_reasoning_policy"), str)
     }
+    runtimes = {
+        row.get("runtime")
+        for row in rows
+        if isinstance(row.get("runtime"), str)
+    }
+    runtime = next(iter(runtimes)) if len(runtimes) == 1 else None
     return {
-        "contract": MODEL_TRANSPORT_CONTRACT,
-        "reasoning_policy_contract": REASONING_POLICY_CONTRACT,
+        "contract": (
+            model_transport_contract(runtime)
+            if isinstance(runtime, str)
+            else None
+        ),
+        "reasoning_policy_contract": (
+            reasoning_policy_contract(runtime)
+            if isinstance(runtime, str)
+            else None
+        ),
+        "runtime": runtime,
         "requested_reasoning_policy": (
             next(iter(policies)) if len(policies) == 1 else None
         ),
@@ -704,6 +807,9 @@ def combine_model_transport_observations(
         ),
         "tool_call_returned": any(
             row.get("tool_call_returned") is True for row in rows
+        ),
+        "visible_reasoning_tag_returned": any(
+            row.get("visible_reasoning_tag_returned") is True for row in rows
         ),
         "finish_state_returned": all(
             row.get("finish_state_returned") is True for row in rows

@@ -218,3 +218,81 @@ models:
     role: reproduced-128k-profile
     notes:
       - This profile shares weights with the 262K entry but freezes a 128K context.
+
+  gemma4:31b-it-bf16:
+    display_name: Gemma 4 31B IT — 31.3B — F16 — 262144-token context
+    provider: gx10
+    runtime: ollama
+    runtime_model: gemma4:31b-it-bf16
+    runtime_digest: sha256:236d76ae08745dbc143c31b9271b0f25750885199aa6039d0fc0113171606e6d
+    source_model: gemma4:31b-it-bf16
+    source_version: "4"
+    architecture: gemma4
+    parameter_variant: 31.3B
+    parameter_count: 31273089132
+    quantization: F16
+    context_length: 262144
+    native_context_length: 262144
+    template_sha256: sha256:b507b9c2f6ca642bffcd06665ea7c91f235fd32daeefdf875a0f938db05fb315
+    runtime_capabilities: [completion, thinking, tools, vision]
+    reasoning_effort: native
+    reasoning_policy: native
+    supported_reasoning_policies: ["off", native]
+    role: curated-runtime-profile
+    notes:
+      - Native and off behavior were verified through bounded OpenAI-compatible probes on 2026-08-28; no effort level is inferred.
+      - The configured smoke on 2026-08-28 preserved an infrastructure diagnostic after both BenchLocal requests exceeded the fixed 180-second case limit; this deployment is currently impractical for GX10 agentic use.
+
+  ornith15-q8:latest:
+    display_name: Ornith-1.5-35B-A3B — 35.5B — Q8_0 — 262144-token context
+    provider: gx10
+    runtime: ollama
+    runtime_model: ornith15-q8:latest
+    runtime_digest: sha256:c7c57f189918400a4b4193530cceec9136f95c019357de02abc61018f8bad485
+    source_model: ornith-ai/Ornith-1.5-35B-A3B
+    source_version: "1.5"
+    architecture: qwen35moe
+    parameter_variant: 35.5B
+    parameter_count: 35505251456
+    quantization: Q8_0
+    context_length: 262144
+    native_context_length: 262144
+    template_sha256: sha256:f55f52930aa8bf44ab5cb85f99370fcc3c56e9a85640b812086d5330bce5d86b
+    runtime_capabilities: [completion, thinking, tools, vision]
+    reasoning_effort: none
+    reasoning_policy: "off"
+    supported_reasoning_policies: ["off", native]
+    role: curated-runtime-profile
+    notes:
+      - Native and off behavior were verified through bounded OpenAI-compatible probes on 2026-08-28; no effort level is inferred.
+      - The intended Hermes deployment disables reasoning; native remains available only as an explicit diagnostic policy.
+
+  deepseek-v4-flash:
+    display_name: DeepSeek V4 Flash — DS4 GGUF + DSpark — 524288-token context
+    provider: gx10
+    runtime: ds4
+    runtime_version: "0.6.5"
+    runtime_model: deepseek-v4-flash
+    runtime_digest: sha256:ca22ae2f838e14077c22bc1c1417b71b45b5e5a3687bd96c2ac6e17fdb6261c0
+    source_model: DeepSeek-V4-Flash
+    source_version: V4-Flash
+    architecture: deepseek
+    parameter_variant: DeepSeek-V4-Flash
+    quantization: DS4-GGUF
+    context_length: 524288
+    reasoning_effort: none
+    reasoning_policy: "off"
+    supported_reasoning_policies: ["off"]
+    endpoint_port: 8000
+    api_mode: openai-chat-completions
+    capabilities:
+      streaming: true
+      tool_calls: true
+    deployment_artifacts:
+      base_gguf_sha256: sha256:ca22ae2f838e14077c22bc1c1417b71b45b5e5a3687bd96c2ac6e17fdb6261c0
+      dspark_drafter_sha256: sha256:8fa269560dc76fd73e4233ad9b1938b5f65dd363381fd9b1a5c6183f7d12d686
+      dspark_enabled: true
+    role: curated-runtime-profile
+    notes:
+      - DS4 exposes only /v1/models and /v1/chat/completions to the harness.
+      - Thinking-disabled control serializes as reasoning_effort=none.

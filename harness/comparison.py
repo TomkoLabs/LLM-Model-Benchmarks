@@ -237,7 +237,13 @@ def _public_hardware_runtime(result: Mapping[str, Any]) -> str:
     if machine and re.fullmatch(r"[A-Za-z0-9_+.-]+", machine):
         layout += f" ({machine} controller)"
     runtime = _text(configured.get("runtime"))
-    runtime_name = "Ollama" if runtime == "ollama" else "local runtime"
+    runtime_name = (
+        "Ollama"
+        if runtime == "ollama"
+        else "DS4"
+        if runtime == "ds4"
+        else "local runtime"
+    )
     version = _text(preflight.get("runtime_version"))
     if version is None:
         phase1 = configured.get("phase1")

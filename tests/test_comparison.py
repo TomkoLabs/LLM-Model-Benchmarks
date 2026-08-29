@@ -109,9 +109,7 @@ class ComparisonTests(unittest.TestCase):
                 runs,
                 "qualified.json",
                 "configured-off",
-                mutate=lambda value: self._set_v4_policy(
-                    value, requested="configured", effective="off"
-                ),
+                mutate=self._set_ds4_v4_policy,
             )
             self._install(
                 runs,
@@ -147,6 +145,10 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(by_id["configured-high"]["reasoning_policy"], "effort:high")
         self.assertEqual(by_id["configured-high"]["benchmark_track"], "primary-deployment")
         self.assertEqual(by_id["explicit-medium"]["benchmark_track"], "controlled-policy")
+        self.assertIn(
+            "DS4 0.6.5; reasoning=off",
+            by_id["configured-off"]["public_hardware_runtime"],
+        )
 
     def test_public_ranking_selects_primary_track_and_exposes_effective_policy(
         self,
@@ -376,6 +378,41 @@ class ComparisonTests(unittest.TestCase):
         value["provenance"]["direct_probe"] = direct_probe
         value["components"]["direct"] = dict(direct_probe)
 
+    @classmethod
+    def _set_ds4_v4_policy(cls, value: dict[str, Any]) -> None:
+        cls._set_v4_policy(value, requested="configured", effective="off")
+        value["provenance"]["reasoning_policy"].update(
+            {
+                "contract": "openai-reasoning-policy-v1",
+                "serialized_endpoint_controls": {
+                    "openai_chat_completions": {"reasoning_effort": "none"},
+                },
+            }
+        )
+        value["provenance"]["model_config"].update(
+            {
+                "runtime": "ds4",
+                "runtime_version": "0.6.5",
+                "reasoning_policy": "off",
+            }
+        )
+        value["components"]["preflight"] = {"runtime_version": "0.6.5"}
+        value["model"]["runtime"] = "ds4"
+        value["model"].update(
+            {
+                "runtime_digest": "sha256:" + "a" * 64,
+                "runtime_version": "0.6.5",
+                "context_length": 65536,
+                "endpoint_api_mode": "openai-chat-completions",
+                "capabilities": {"streaming": True, "tool_calls": True},
+                "deployment_artifacts": {
+                    "base_gguf_sha256": "sha256:" + "a" * 64,
+                    "dspark_drafter_sha256": "sha256:" + "d" * 64,
+                    "dspark_enabled": True,
+                },
+            }
+        )
+
     def _install(
         self,
         runs: Path,
@@ -558,6 +595,7 @@ class ComparisonTests(unittest.TestCase):
             invalid.mkdir(parents=True)
             shutil.copy(FIXTURES / "qualified.json", invalid / "results.json")
             value = json.loads((invalid / "results.json").read_text(encoding="utf-8"))
+            self._set_ds4_v4_policy(value)
             value["outcome"] = "UNKNOWN"
             (invalid / "results.json").write_text(
                 json.dumps(value), encoding="utf-8"

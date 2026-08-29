@@ -178,6 +178,57 @@ def _validate_model_config(alias: str, model: Mapping[str, Any]) -> None:
             "use a full sha256 digest or null"
         )
 
+    runtime = model["runtime"]
+    if runtime not in {"ollama", "ds4"}:
+        raise ConfigurationError(
+            f"model {alias!r} has unsupported runtime {runtime!r}"
+        )
+    if runtime == "ds4":
+        for field in ("runtime_version", "api_mode"):
+            if not isinstance(model.get(field), str) or not model[field]:
+                raise ConfigurationError(
+                    f"DS4 model {alias!r} has invalid {field}"
+                )
+        if model["api_mode"] != "openai-chat-completions":
+            raise ConfigurationError(
+                f"DS4 model {alias!r} must use OpenAI chat completions"
+            )
+        if type(model.get("endpoint_port")) is not int or model["endpoint_port"] < 1:
+            raise ConfigurationError(
+                f"DS4 model {alias!r} has invalid endpoint_port"
+            )
+        artifacts = model.get("deployment_artifacts")
+        if not isinstance(artifacts, Mapping):
+            raise ConfigurationError(
+                f"DS4 model {alias!r} has no deployment_artifacts"
+            )
+        for field in ("base_gguf_sha256", "dspark_drafter_sha256"):
+            if not (
+                isinstance(artifacts.get(field), str)
+                and re.fullmatch(r"sha256:[0-9a-f]{64}", artifacts[field])
+            ):
+                raise ConfigurationError(
+                    f"DS4 model {alias!r} has invalid {field}"
+                )
+        if artifacts.get("dspark_enabled") is not True:
+            raise ConfigurationError(
+                f"DS4 model {alias!r} must record DSpark enabled state"
+            )
+        if runtime_digest != artifacts["base_gguf_sha256"]:
+            raise ConfigurationError(
+                f"DS4 model {alias!r} runtime_digest must equal its base GGUF checksum"
+            )
+        capabilities = model.get("capabilities")
+        if not isinstance(capabilities, Mapping):
+            raise ConfigurationError(
+                f"DS4 model {alias!r} has invalid capabilities"
+            )
+        for field in ("streaming", "tool_calls"):
+            if capabilities.get(field) is not True:
+                raise ConfigurationError(
+                    f"DS4 model {alias!r} must record {field} capability"
+                )
+
 
 def load_models(path: Path = DEFAULT_MODELS) -> dict[str, dict[str, Any]]:
     document = _load_yaml(path, "model configuration")
@@ -196,24 +247,6 @@ def load_models(path: Path = DEFAULT_MODELS) -> dict[str, dict[str, Any]]:
         _validate_model_config(alias, model)
 
     return models
-
-
-def _prohibited_model(alias: str, model: dict[str, Any]) -> bool:
-    identity = " ".join(
-        str(value)
-        for value in (
-            alias,
-            model.get("display_name", ""),
-            model.get("runtime_model", ""),
-            model.get("source_model", ""),
-        )
-    ).lower()
-
-    return (
-        "deepseek" in identity
-        and "v4" in identity
-        and "flash" in identity
-    )
 
 
 def _validate_endpoint(value: Any) -> str:
@@ -484,11 +517,6 @@ def load_execution_plan(
     else:
         model = models[model_alias]
 
-    if _prohibited_model(model_alias, model):
-        raise ConfigurationError(
-            "DeepSeek V4 Flash is prohibited on the current single-GX10 setup"
-        )
-
     generation = config.get("benchmark_generation")
     hermes = config.get("hermes")
     runtime = config.get("baseline_runtime")
@@ -515,7 +543,7 @@ def load_execution_plan(
 
     endpoint = _validate_endpoint(runtime.get("endpoint"))
 
-    if model["runtime"] != runtime.get("runtime"):
+    if model_override is None and model["runtime"] != runtime.get("runtime"):
         raise ConfigurationError(
             "model runtime does not match the benchmark baseline runtime"
         )
@@ -666,7 +694,11 @@ def load_execution_plan(
             "detected Hermes version does not match the frozen configuration"
         )
 
-    configured_runtime_version = runtime.get("ollama_version")
+    configured_runtime_version = (
+        model.get("runtime_version")
+        if model["runtime"] != "ollama"
+        else runtime.get("ollama_version")
+    )
 
     if not isinstance(configured_runtime_version, str) or not configured_runtime_version:
         raise ConfigurationError("baseline Ollama version is missing")
@@ -778,6 +810,7 @@ def preflight_model(
     *,
     expected_digest: str | None,
     timeout: int = 10,
+    runtime_config: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     try:
         endpoint = validate_local_openai_endpoint(endpoint).base_url
@@ -811,6 +844,85 @@ def preflight_model(
             f"configured model identity is missing or ambiguous: {runtime_model} "
             "(models are never pulled automatically)"
         )
+
+    runtime_config = (
+        runtime_config if isinstance(runtime_config, Mapping) else {}
+    )
+    runtime = str(runtime_config.get("runtime") or "ollama")
+    if runtime == "ds4":
+        if expected_digest is None:
+            raise InfrastructureError(
+                "DS4 requires a configured immutable base GGUF checksum"
+            )
+        artifacts = runtime_config.get("deployment_artifacts")
+        if not isinstance(artifacts, Mapping):
+            raise InfrastructureError("DS4 deployment artifact provenance is missing")
+        if artifacts.get("base_gguf_sha256") != expected_digest:
+            raise InfrastructureError(
+                "DS4 base GGUF checksum does not match runtime_digest"
+            )
+        if not (
+            isinstance(artifacts.get("dspark_drafter_sha256"), str)
+            and re.fullmatch(
+                r"sha256:[0-9a-f]{64}",
+                str(artifacts["dspark_drafter_sha256"]),
+            )
+            and artifacts.get("dspark_enabled") is True
+        ):
+            raise InfrastructureError("DS4 DSpark provenance is incomplete")
+        runtime_version = runtime_config.get("runtime_version")
+        if not isinstance(runtime_version, str) or not runtime_version:
+            raise InfrastructureError("DS4 runtime version is missing")
+        match = model_matches[0]
+        runtime_metadata = {
+            key: runtime_config[key]
+            for key in (
+                "canonical_name",
+                "source_model",
+                "source_version",
+                "architecture",
+                "parameter_variant",
+                "parameter_count",
+                "quantization",
+                "native_context_length",
+            )
+            if runtime_config.get(key) is not None
+        }
+        if "source_version" in runtime_metadata:
+            runtime_metadata["version"] = runtime_metadata.pop("source_version")
+        runtime_metadata["effective_context_length"] = runtime_config.get(
+            "context_length"
+        )
+        runtime_metadata["metadata_sources"] = {
+            "runtime_model": "/v1/models exact identifier match",
+            "runtime_digest": "models.yaml operator-verified base GGUF checksum",
+            "dspark_drafter": "models.yaml operator-verified DSpark checksum",
+            "effective_context_length": "models.yaml configured DS4 context",
+        }
+        return {
+            "endpoint": endpoint,
+            "redirect_policy": "reject",
+            "runtime": "ds4",
+            "runtime_version": runtime_version,
+            "runtime_version_source": "models.yaml installed deployment provenance",
+            "runtime_model": runtime_model,
+            "reported_id": match.get("id"),
+            "reported_object": match.get("object"),
+            "reported_owner": match.get("owned_by"),
+            "runtime_model_digest": expected_digest,
+            "expected_runtime_digest": expected_digest,
+            "expected_digest_status": "CONFIGURED_ARTIFACT_MATCH",
+            "metadata_endpoints": {
+                "/v1/models": {"method": "GET", "status": "REACHABLE"}
+            },
+            "identity_status": "VERIFIED_MODEL_ID_AND_CONFIGURED_ARTIFACTS",
+            "endpoint_api_mode": "openai-chat-completions",
+            "deployment_artifacts": dict(artifacts),
+            "capabilities": dict(runtime_config.get("capabilities") or {}),
+            "public_runtime_metadata": runtime_metadata,
+        }
+    if runtime != "ollama":
+        raise InfrastructureError(f"unsupported model runtime: {runtime}")
 
     parsed = urlsplit(endpoint)
     tags_url = f"{parsed.scheme}://{parsed.netloc}/api/tags"
@@ -904,6 +1016,23 @@ def preflight_model(
     runtime_metadata = extract_runtime_metadata(
         identity_matches[0], show_payload
     )
+    expected_template = runtime_config.get("template_sha256")
+    if (
+        isinstance(expected_template, str)
+        and runtime_metadata.get("template_sha256") != expected_template
+    ):
+        raise InfrastructureError(
+            f"runtime template checksum mismatch for {runtime_model}"
+        )
+    expected_capabilities = runtime_config.get("runtime_capabilities")
+    if (
+        isinstance(expected_capabilities, list)
+        and sorted(expected_capabilities)
+        != runtime_metadata.get("capabilities")
+    ):
+        raise InfrastructureError(
+            f"runtime capabilities mismatch for {runtime_model}"
+        )
     metadata_sources = runtime_metadata.setdefault("metadata_sources", {})
     if isinstance(metadata_sources, dict):
         metadata_sources.update(

@@ -1513,6 +1513,24 @@ class ScoringAndEvidenceTests(unittest.TestCase):
         with self.assertRaises(jsonschema.ValidationError):
             jsonschema.Draft202012Validator(task_schema).validate(task)
 
+    def test_result_schema_accepts_ds4_verified_identity_status(self) -> None:
+        plan = benchmark_model.load_execution_plan("qwen38-q8-medium-128k")
+        ds4 = benchmark_model.load_models()["deepseek-v4-flash"]
+        self.assertEqual(ds4["runtime"], "ds4")
+        plan["model_alias"] = "deepseek-v4-flash"
+        plan["model"] = ds4
+        plan["endpoint"] = "http://10.23.45.67:8000/v1"
+        result = make_result(plan, "harness-smoke-v1", "PASS", 100.0)
+        result["model"]["runtime_identity_status"] = (
+            "VERIFIED_MODEL_ID_AND_CONFIGURED_ARTIFACTS"
+        )
+
+        validate_result(result)
+
+        result["model"]["runtime_identity_status"] = "VERIFIED_MODEL_ID_ONLY"
+        with self.assertRaises(jsonschema.ValidationError):
+            validate_result(result)
+
 
 class SuiteLifecycleTests(unittest.TestCase):
     def test_model_failure_continues_and_between_task_state_is_durable(self) -> None:

@@ -34,14 +34,14 @@ from harness.model_gateway import (
 )
 from harness.model_identity import ModelMetadataError, resolve_public_identity
 from harness.reasoning_policy import (
-    REASONING_POLICY_CONTRACT,
     SUPPORTED_REASONING_POLICIES,
     ReasoningPolicy,
     ReasoningPolicyError,
     classify_direct_response,
-    ollama_reasoning_control,
+    reasoning_policy_contract,
     reasoning_policy_selection,
     resolve_reasoning_policy,
+    runtime_reasoning_control,
 )
 from harness.upstreams import (
     HERMES_PYTHON,
@@ -119,45 +119,41 @@ def load_configuration() -> dict[str, Any]:
     return config
 
 
-def resolve_endpoint(override: str | None) -> LocalEndpoint:
+def resolve_endpoint(
+    override: str | None,
+    requested_model: str | None = None,
+) -> LocalEndpoint:
     value = override or os.environ.get("HERMES_BENCH_ENDPOINT")
     if not value and LOCAL_CONFIG_PATH.is_file():
         local = _load_yaml(LOCAL_CONFIG_PATH, "local configuration")
         value = local.get("endpoint")
     value = value or "http://127.0.0.1:11434/v1"
+    if override is None and requested_model:
+        from harness.benchmark_model import load_models
+
+        models = load_models(MODELS_PATH)
+        configured = models.get(requested_model)
+        if configured is None:
+            matches = [
+                model
+                for model in models.values()
+                if model.get("runtime_model") == requested_model
+            ]
+            if len(matches) == 1:
+                configured = matches[0]
+        endpoint_port = (
+            configured.get("endpoint_port")
+            if isinstance(configured, Mapping)
+            else None
+        )
+        if type(endpoint_port) is int:
+            base = validate_local_openai_endpoint(str(value))
+            host = f"[{base.host}]" if ":" in base.host else base.host
+            value = f"http://{host}:{endpoint_port}/v1"
     try:
         return validate_local_openai_endpoint(str(value))
     except EndpointPolicyError as exc:
         raise QualificationError(str(exc)) from exc
-
-
-def _prohibited_model(value: str) -> bool:
-    normalized = value.lower().replace("_", "-")
-    return (
-        "deepseek" in normalized
-        and "v4" in normalized
-        and "flash" in normalized
-    )
-
-
-def _reject_prohibited_model_config(
-    alias: str,
-    model: Mapping[str, Any],
-) -> None:
-    identity = " ".join(
-        str(value)
-        for value in (
-            alias,
-            model.get("display_name", ""),
-            model.get("runtime_model", ""),
-            model.get("canonical_name", ""),
-            model.get("source_model", ""),
-        )
-    )
-    if _prohibited_model(identity):
-        raise QualificationError(
-            "DeepSeek V4 Flash is prohibited on the current single-GX10 setup"
-        )
 
 
 def _curated_model(
@@ -193,18 +189,27 @@ def _curated_model(
     alias, configured = selected
     model = dict(configured)
     model["configuration_source"] = "models.yaml curated override"
-    model["metadata_sources"] = {
-        "runtime_model": "models.yaml curated override",
-        "runtime_digest": "models.yaml expected digest; verified by /api/tags",
-        "quantization": "models.yaml expected value; verified by /api/show",
-        "effective_context_length": (
-            "models.yaml run-local request configuration"
-        ),
-        "reasoning_effort": "models.yaml curated override",
-        "reasoning_policy": "models.yaml curated deployment policy",
-        "supported_reasoning_policies": "models.yaml explicit support list",
-    }
-    _reject_prohibited_model_config(alias, model)
+    if model.get("runtime") == "ds4":
+        model["metadata_sources"] = {
+            "runtime_model": "models.yaml; verified by /v1/models",
+            "runtime_digest": "models.yaml operator-verified base GGUF checksum",
+            "dspark_drafter": "models.yaml operator-verified DSpark checksum",
+            "effective_context_length": "models.yaml configured DS4 context",
+            "reasoning_policy": "models.yaml curated deployment policy",
+            "supported_reasoning_policies": "models.yaml explicit support list",
+        }
+    else:
+        model["metadata_sources"] = {
+            "runtime_model": "models.yaml curated override",
+            "runtime_digest": "models.yaml expected digest; verified by /api/tags",
+            "quantization": "models.yaml expected value; verified by /api/show",
+            "effective_context_length": (
+                "models.yaml run-local request configuration"
+            ),
+            "reasoning_effort": "models.yaml curated override",
+            "reasoning_policy": "models.yaml curated deployment policy",
+            "supported_reasoning_policies": "models.yaml explicit support list",
+        }
     return alias, str(configured["runtime_model"]), model
 
 
@@ -289,11 +294,6 @@ def resolve_model(
 ) -> tuple[str, str, dict[str, Any], dict[str, Any] | None]:
     if not isinstance(requested, str) or not requested.strip():
         raise QualificationError("--model must be non-empty")
-    if _prohibited_model(requested):
-        raise QualificationError(
-            "DeepSeek V4 Flash is prohibited on the current single-GX10 setup"
-        )
-
     from harness.benchmark_model import load_models
 
     models = load_models(MODELS_PATH)
@@ -326,7 +326,6 @@ def resolve_model(
     except InfrastructureError as exc:
         raise QualificationError(str(exc)) from exc
     model = _discovered_model_config(requested, preflight)
-    _reject_prohibited_model_config(requested, model)
     return requested, requested, model, preflight
 
 
@@ -567,6 +566,11 @@ def calculate_decision(
         and direct_transport.get("response_count") == 2
     ):
         failures.append("direct model transport evidence missing or broken")
+    if (
+        isinstance(direct_transport, Mapping)
+        and direct_transport.get("visible_reasoning_tag_returned") is True
+    ):
+        failures.append("direct endpoint returned visible reasoning tags")
 
     upstream = components.get("upstreams", {})
     for name, component in upstream.items():
@@ -588,6 +592,11 @@ def calculate_decision(
             failures.append(
                 f"reasoning-policy off returned reasoning content: {name}"
             )
+        if (
+            isinstance(control, Mapping)
+            and control.get("visible_reasoning_tag_returned") is True
+        ):
+            failures.append(f"visible reasoning tags returned: {name}")
 
     hermes_rows = components.get("hermes", [])
     for row in hermes_rows:
@@ -621,6 +630,13 @@ def calculate_decision(
         ):
             failures.append(
                 f"reasoning-policy off returned reasoning content: Hermes {row.get('task_id')}"
+            )
+        if (
+            isinstance(control, Mapping)
+            and control.get("visible_reasoning_tag_returned") is True
+        ):
+            failures.append(
+                f"visible reasoning tags returned: Hermes {row.get('task_id')}"
             )
 
     network_attempts = components.get("blocked_network_attempts", [])
@@ -838,6 +854,7 @@ def _dry_plan(
     reasoning_policy_request: str,
     reasoning_policy: ReasoningPolicy,
     reasoning_policy_source: str,
+    runtime: str = "ollama",
 ) -> dict[str, Any]:
     configuration = load_configuration()
     lock = load_upstream_lock()
@@ -885,20 +902,27 @@ def _dry_plan(
         "qualification_generation": configuration["generation"],
         "direct_probe": dict(configuration["direct_probe"]),
         "reasoning_policy": {
-            "contract": REASONING_POLICY_CONTRACT,
+            "contract": reasoning_policy_contract(runtime),
             "requested": reasoning_policy_request,
             "effective": reasoning_policy.value,
             "source": reasoning_policy_source,
             "selection_mode": selection_mode,
             "benchmark_track": benchmark_track,
             "cohort": reasoning_policy.cohort,
-            "openai_chat_completions": ollama_reasoning_control(
-                "openai-chat-completions", reasoning_policy
+            "openai_chat_completions": runtime_reasoning_control(
+                runtime, "openai-chat-completions", reasoning_policy
             ),
-            "ollama_native_chat": ollama_reasoning_control(
-                "ollama-native-chat", reasoning_policy
+            **(
+                {
+                    "ollama_native_chat": runtime_reasoning_control(
+                        runtime, "ollama-native-chat", reasoning_policy
+                    )
+                }
+                if runtime == "ollama"
+                else {}
             ),
         },
+        "runtime": runtime,
         "endpoint": endpoint.base_url,
         "model": model,
         "model_resolution": model_resolution,
@@ -938,12 +962,13 @@ def execute(
         raise QualificationError(f"unknown profile: {profile_name}")
     profile = config["profiles"][profile_name]
     direct_probe_config = dict(config["direct_probe"])
-    endpoint = resolve_endpoint(endpoint_override)
+    endpoint = resolve_endpoint(endpoint_override, requested_model)
     repository = repository_provenance(require_clean=True)
     alias, runtime_model, model_config, discovered_preflight = resolve_model(
         requested_model,
         endpoint=endpoint.base_url,
     )
+    runtime = str(model_config.get("runtime") or "ollama")
     try:
         reasoning_policy, reasoning_policy_source = resolve_reasoning_policy(
             reasoning_policy_request, model_config
@@ -953,11 +978,13 @@ def execute(
     reasoning_policy_selection_mode, benchmark_track = reasoning_policy_selection(
         reasoning_policy_request
     )
-    openai_control = ollama_reasoning_control(
-        "openai-chat-completions", reasoning_policy
+    openai_control = runtime_reasoning_control(
+        runtime, "openai-chat-completions", reasoning_policy
     )
-    native_control = ollama_reasoning_control(
-        "ollama-native-chat", reasoning_policy
+    native_control = (
+        runtime_reasoning_control(runtime, "ollama-native-chat", reasoning_policy)
+        if runtime == "ollama"
+        else None
     )
     print(f"effective_reasoning_policy={reasoning_policy.value}", flush=True)
     print(f"reasoning_policy_source={reasoning_policy_source}", flush=True)
@@ -971,11 +998,12 @@ def execute(
         + json.dumps(openai_control, sort_keys=True, separators=(",", ":")),
         flush=True,
     )
-    print(
-        "native_reasoning_control="
-        + json.dumps(native_control, sort_keys=True, separators=(",", ":")),
-        flush=True,
-    )
+    if native_control is not None:
+        print(
+            "native_reasoning_control="
+            + json.dumps(native_control, sort_keys=True, separators=(",", ":")),
+            flush=True,
+        )
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_id = f"{timestamp}-{safe_slug(runtime_model)}-{profile_name}"
@@ -1005,7 +1033,7 @@ def execute(
         "profile_config": profile,
         "direct_probe": direct_probe_config,
         "reasoning_policy": {
-            "contract": REASONING_POLICY_CONTRACT,
+            "contract": reasoning_policy_contract(runtime),
             "requested": reasoning_policy_request,
             "effective": reasoning_policy.value,
             "source": reasoning_policy_source,
@@ -1014,12 +1042,17 @@ def execute(
             "cohort": reasoning_policy.cohort,
             "serialized_endpoint_controls": {
                 "openai_chat_completions": openai_control,
-                "ollama_native_chat": native_control,
+                **(
+                    {"ollama_native_chat": native_control}
+                    if native_control is not None
+                    else {}
+                ),
             },
         },
         "model_request": requested_model,
         "model_alias": alias,
         "runtime_model": runtime_model,
+        "runtime": runtime,
         "model_config": model_config,
         "endpoint": endpoint.base_url,
         "repository": repository,
@@ -1070,8 +1103,13 @@ def execute(
             endpoint.base_url,
             runtime_model,
             expected_digest=model_config.get("runtime_digest"),
+            runtime_config=model_config,
         )
-        version = endpoint_request(endpoint.origin + "/api/version", timeout=10)
+        version = (
+            endpoint_request(endpoint.origin + "/api/version", timeout=10)
+            if runtime == "ollama"
+            else {"version": model_config.get("runtime_version")}
+        )
     except InfrastructureError as exc:
         raise QualificationError(str(exc)) from exc
     preflight["runtime_version"] = version.get("version")
@@ -1111,6 +1149,7 @@ def execute(
         stage="direct",
         observations_path=direct_observations_path,
         upstream_timeout=remaining_profile_seconds(),
+        runtime=runtime,
     ) as gateway:
         manifest.setdefault("model_transport_boundaries", {})["direct"] = (
             gateway.metadata
@@ -1159,6 +1198,7 @@ def execute(
             stage=name,
             observations_path=observations_path,
             upstream_timeout=remaining_profile_seconds(),
+            runtime=runtime,
         ) as gateway:
             command = list(command_factory(gateway.endpoint.base_url))
             manifest["invocations"][name] = command
@@ -1325,7 +1365,7 @@ def execute(
     model_metadata = {
         **effective_model_config,
         "runtime_digest": preflight["runtime_model_digest"],
-        "runtime_identity_status": "VERIFIED",
+        "runtime_identity_status": preflight["identity_status"],
     }
     benchmark_metadata = {
         **plan["benchmark"],
@@ -1361,6 +1401,7 @@ def execute(
             stage=f"hermes-{task_id}",
             observations_path=hermes_transport_path,
             upstream_timeout=remaining_profile_seconds(),
+            runtime=runtime,
         ) as gateway:
             manifest.setdefault("model_transport_boundaries", {})[
                 f"hermes-{task_id}"
@@ -1378,6 +1419,7 @@ def execute(
                 model_alias=alias,
                 model_metadata=model_metadata,
                 benchmark_metadata=benchmark_metadata,
+                runtime=runtime,
                 evaluator_timeout=plan["evaluator_timeout_seconds"],
                 wall_timeout_seconds=remaining_profile_seconds(),
             )
@@ -1420,6 +1462,7 @@ def execute(
         "requested": requested_model,
         "config_alias": alias,
         "runtime_model": runtime_model,
+        "runtime": runtime,
         "runtime_digest": preflight["runtime_model_digest"],
         "endpoint": endpoint.base_url,
         "quantization": effective_model_config["quantization"],
@@ -1447,6 +1490,12 @@ def execute(
             "runtime_default_context_length"
         ),
         "metadata_discrepancies": metadata_discrepancies,
+        "deployment_artifacts": effective_model_config.get(
+            "deployment_artifacts"
+        ),
+        "runtime_version": preflight.get("runtime_version"),
+        "endpoint_api_mode": effective_model_config.get("api_mode"),
+        "capabilities": effective_model_config.get("capabilities"),
     }
     try:
         result_model["public_identity"] = resolve_public_identity(
@@ -1660,7 +1709,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not args.model:
             parser.error("--model is required unless --setup-only or --list-upstreams is used")
         config = load_configuration()
-        endpoint = resolve_endpoint(args.endpoint)
+        endpoint = resolve_endpoint(args.endpoint, args.model)
         _alias, runtime_model, _model, _preflight = resolve_model(args.model)
         profile = config["profiles"][args.profile]
         if args.dry_run:
@@ -1683,6 +1732,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         reasoning_policy_request=args.reasoning_policy,
                         reasoning_policy=dry_policy,
                         reasoning_policy_source=dry_policy_source,
+                        runtime=str(_model.get("runtime") or "ollama"),
                     ),
                     indent=2,
                 )

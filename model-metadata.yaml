@@ -123,3 +123,42 @@ models:
       - qwen38-q8-medium-262k
       - qwen38-q8-medium-128k
     metadata_source: Ollama /api/tags and /api/show, observed 2026-08-26
+
+  sha256:236d76ae08745dbc143c31b9271b0f25750885199aa6039d0fc0113171606e6d:
+    canonical_name: Gemma 4 31B IT
+    source_model: gemma4:31b-it-bf16
+    source_url: null
+    version: "4"
+    parameter_variant: 31.3B
+    architecture: gemma4
+    quantization: F16
+    source_filename: null
+    aliases:
+      - gemma4:31b-it-bf16
+    metadata_source: Ollama /api/tags and /api/show, observed 2026-08-28
+
+  sha256:c7c57f189918400a4b4193530cceec9136f95c019357de02abc61018f8bad485:
+    canonical_name: Ornith-1.5
+    source_model: ornith-ai/Ornith-1.5-35B-A3B
+    source_url: https://huggingface.co/ornith-ai/Ornith-1.5-35B-A3B
+    version: "1.5"
+    parameter_variant: 35.5B
+    architecture: qwen35moe
+    quantization: Q8_0
+    source_filename: null
+    aliases:
+      - ornith15-q8:latest
+    metadata_source: Ollama /api/tags and /api/show, observed 2026-08-28
+
+  sha256:ca22ae2f838e14077c22bc1c1417b71b45b5e5a3687bd96c2ac6e17fdb6261c0:
+    canonical_name: DeepSeek V4 Flash
+    source_model: DeepSeek-V4-Flash
+    source_url: null
+    version: V4-Flash
+    parameter_variant: DeepSeek-V4-Flash
+    architecture: deepseek
+    quantization: DS4-GGUF
+    source_filename: null
+    aliases:
+      - deepseek-v4-flash
+    metadata_source: Operator-provided DS4 v0.6.5 base GGUF checksum and deployment metadata, recorded 2026-08-28

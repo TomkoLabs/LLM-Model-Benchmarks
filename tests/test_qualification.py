@@ -290,6 +290,37 @@ class QualificationDecisionTests(unittest.TestCase):
         self.assertEqual(outcome, "NOT_QUALIFIED")
         self.assertIn("Hermes candidate scope violation: task", gates["failures"])
 
+    def test_visible_reasoning_tags_fail_every_transport_stage(self) -> None:
+        components = self._components()
+        components["direct"]["model_transport"][
+            "visible_reasoning_tag_returned"
+        ] = True
+        components["upstreams"]["benchlocal-behavioral"]["model_transport"][
+            "visible_reasoning_tag_returned"
+        ] = True
+        components["hermes"][0]["model_transport"][
+            "visible_reasoning_tag_returned"
+        ] = True
+        outcome, gates, _scores = qualification.calculate_decision(
+            "standard",
+            components,
+            qualification.load_configuration(),
+            parse_reasoning_policy("native"),
+        )
+        self.assertEqual(outcome, "NOT_QUALIFIED")
+        self.assertIn(
+            "direct endpoint returned visible reasoning tags",
+            gates["failures"],
+        )
+        self.assertIn(
+            "visible reasoning tags returned: benchlocal-behavioral",
+            gates["failures"],
+        )
+        self.assertIn(
+            "visible reasoning tags returned: Hermes task",
+            gates["failures"],
+        )
+
     def test_cloud_fallback_attempt_detection(self) -> None:
         found = detect_fallback_attempts(
             "Auxiliary client: PAID lane engaged for auxiliary task\n"
@@ -889,11 +920,16 @@ class QualificationDecisionTests(unittest.TestCase):
             )
         self.assertEqual(before, {path: path.read_bytes() for path in tracked})
 
-    def test_prohibited_model_is_rejected_before_any_runtime_query(self) -> None:
+    def test_ds4_curated_model_resolves_without_ollama_discovery(self) -> None:
         with mock.patch.object(benchmark_model, "preflight_model") as preflight:
-            with self.assertRaises(qualification.QualificationError):
-                qualification.resolve_model("deepseek-v4-flash:latest")
+            alias, runtime, config, observed = qualification.resolve_model(
+                "deepseek-v4-flash"
+            )
         preflight.assert_not_called()
+        self.assertEqual((alias, runtime), ("deepseek-v4-flash", "deepseek-v4-flash"))
+        self.assertEqual(config["runtime"], "ds4")
+        self.assertEqual(config["reasoning_policy"], "off")
+        self.assertIsNone(observed)
 
     def test_unconfigured_dry_resolution_defers_endpoint_contact(self) -> None:
         with mock.patch.object(benchmark_model, "preflight_model") as preflight:
@@ -1010,6 +1046,9 @@ class PublicConfigurationTests(unittest.TestCase):
                 "hermes4-70b:latest": "effort:medium",
                 "qwen38-q8-medium-262k": "effort:medium",
                 "qwen38-q8-medium-128k": "effort:medium",
+                "gemma4:31b-it-bf16": "native",
+                "ornith15-q8:latest": "off",
+                "deepseek-v4-flash": "off",
             },
         )
         for alias, model in benchmark_model.load_models().items():

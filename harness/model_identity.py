@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import json
 import re
@@ -132,6 +133,20 @@ def extract_runtime_metadata(
         effective_sources.append("/api/show parameters num_ctx")
     if effective_context in modelfile_contexts:
         effective_sources.append("/api/show Modelfile PARAMETER num_ctx")
+    template = show_payload.get("template")
+    template_sha256 = (
+        "sha256:" + hashlib.sha256(template.encode("utf-8")).hexdigest()
+        if isinstance(template, str) and template
+        else None
+    )
+    capabilities = show_payload.get("capabilities")
+    capabilities = (
+        sorted(set(capabilities))
+        if isinstance(capabilities, list)
+        and capabilities
+        and all(isinstance(value, str) and value for value in capabilities)
+        else None
+    )
 
     metadata = {
         "canonical_name": _public_text(info.get("general.basename")),
@@ -156,6 +171,8 @@ def extract_runtime_metadata(
         "source_filename": _modelfile_source_basename(
             show_payload.get("modelfile")
         ),
+        "template_sha256": template_sha256,
+        "capabilities": capabilities,
         "metadata_sources": {
             "canonical_name": "/api/show model_info.general.basename",
             "version": "/api/show model_info.general.version",
@@ -167,6 +184,8 @@ def extract_runtime_metadata(
             "native_context_length": "/api/tags details.context_length or /api/show model_info architecture context_length",
             "effective_context_length": " and ".join(effective_sources),
             "source_filename": "/api/show Modelfile FROM basename",
+            "template_sha256": "/api/show template",
+            "capabilities": "/api/show capabilities",
         },
         "metadata_discrepancies": discrepancies,
     }
