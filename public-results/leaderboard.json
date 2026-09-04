@@ -4,25 +4,25 @@
     "name": "LLM Model Benchmarks",
     "url": "https://github.com/TomkoLabs/LLM-Model-Benchmarks"
   },
-  "generated_at": "2026-08-28T21:11:10Z",
+  "generated_at": "2026-09-02T18:23:33Z",
   "generation_basis": "latest source-run timestamp (deterministic for unchanged inputs)",
   "source_run_selection": "all discovered runs in timestamp/run-ID order; ranking selects only the exact current primary configured-deployment compatibility group",
   "ranking_rule": "overall score descending, then coding, Hermes, tool/instruction, reliability, and performance scores descending; then timestamp and run ID",
   "result_scope": "Each row describes the complete configured deployment, including its exact resolved reasoning policy, digest, quantization, runtime/template, context, hardware, and harness configuration.",
   "current_standard": {
     "profile": "standard",
-    "qualification_generation": "gx10-qualification-v4",
-    "scoring_version": "gx10-qualification-v4",
+    "qualification_generation": "gx10-qualification-v5",
+    "scoring_version": "gx10-qualification-v5",
     "benchmark_track": "primary-deployment",
     "reasoning_policy_rule": "configured-per-model",
     "direct_probe_contract": "gx10-direct-probe-v1",
     "direct_probe_max_tokens": 1024,
-    "compatibility_group": "group-5c81300fb8a6",
-    "upstream_pin_set": "pins-86f0df70c02c",
+    "compatibility_group": "group-e8dffb9e2939",
+    "upstream_pin_set": "pins-2bbda99377d5",
     "upstream_pins": {
       "benchlocal-cli": "47d1d66d678c893e6f2b6ff7aba448fcc6094e2d",
       "infermark": "f7216dfc5dd67e68dd023e94b389a641c7111eb3",
-      "spark-bench": "364e6ecf684988b024cdd9b1ae1feb0e44342603"
+      "spark-bench": "125ba161d9a91b705ff0cbb22471ac2914d9dea8"
     }
   },
   "source_run_ids": [
@@ -60,104 +60,101 @@
     "20260828T152940Z-deepseek-v4-flash-f61ff5cf-smoke",
     "20260828T154140Z-deepseek-v4-flash-f61ff5cf-smoke",
     "20260828T165233Z-ornith15-q8-latest-330554b2-standard",
-    "20260828T204155Z-deepseek-v4-flash-f61ff5cf-standard"
+    "20260828T204155Z-deepseek-v4-flash-f61ff5cf-standard",
+    "20260831T215915Z-qwen3.8-flash-next-9b17db7a-smoke",
+    "20260901T014009Z-qwen3.8-flash-next-9b17db7a-smoke",
+    "20260901T014251Z-qwen3.8-flash-next-9b17db7a-smoke",
+    "20260901T020003Z-qwen3.8-flash-next-9b17db7a-standard",
+    "20260901T155636Z-qwen3.8-flash-next-9b17db7a-smoke",
+    "20260901T162913Z-qwen3.8-flash-next-9b17db7a-smoke",
+    "20260901T163045Z-qwen3.8-flash-next-9b17db7a-standard",
+    "20260901T184158Z-qwen38-q8-262k-latest-3271673b-smoke",
+    "20260901T184601Z-qwen38-q8-262k-latest-3271673b-standard",
+    "20260902T002055Z-ornith15-q8-latest-330554b2-smoke",
+    "20260902T002203Z-ornith15-q8-latest-330554b2-standard",
+    "20260902T010018Z-coder-uncens-latest-ba5d22c1-smoke",
+    "20260902T010243Z-coder-uncens-latest-ba5d22c1-standard",
+    "20260902T034130Z-coder-uncens-256k-latest-ed8dc6ee-smoke",
+    "20260902T034318Z-coder-uncens-256k-latest-ed8dc6ee-standard",
+    "20260902T043058Z-agent-main-latest-0960376c-smoke",
+    "20260902T043355Z-deepseek-v4-flash-f61ff5cf-smoke",
+    "20260902T043509Z-deepseek-v4-flash-f61ff5cf-standard",
+    "20260902T140420Z-coder-uncens-latest-ba5d22c1-standard",
+    "20260902T151036Z-coder-uncens-256k-latest-ed8dc6ee-standard",
+    "20260902T161250Z-agent-main-latest-0960376c-standard",
+    "20260902T172340Z-deepseek-v4-flash-f61ff5cf-standard"
   ],
   "qualified": [
     {
       "rank": 1,
-      "run_id": "20260828T204155Z-deepseek-v4-flash-f61ff5cf-standard",
+      "run_id": "20260901T163045Z-qwen3.8-flash-next-9b17db7a-standard",
       "run_count": 1,
-      "benchmark_date": "2026-08-28",
-      "started_at": "2026-08-28T20:41:55Z",
-      "completed_at": "2026-08-28T21:11:10Z",
+      "benchmark_date": "2026-09-01",
+      "started_at": "2026-09-01T16:30:45Z",
+      "completed_at": "2026-09-01T18:41:38Z",
       "model_identity": {
         "status": "COMPLETE",
-        "display_name": "DeepSeek V4 Flash V4-Flash [DeepSeek-V4-Flash] — DeepSeek-V4-Flash (deepseek) — DS4-GGUF — 524288-token context — sha256:ca22ae2f838e14077c22bc1c1417b71b45b5e5a3687bd96c2ac6e17fdb6261c0",
-        "canonical_name": "DeepSeek V4 Flash",
-        "source_model": "DeepSeek-V4-Flash",
-        "source_url": null,
-        "version": "V4-Flash",
-        "parameter_variant": "DeepSeek-V4-Flash",
-        "architecture": "deepseek",
-        "quantization": "DS4-GGUF",
-        "context_length": 524288,
-        "immutable_digest": "sha256:ca22ae2f838e14077c22bc1c1417b71b45b5e5a3687bd96c2ac6e17fdb6261c0",
+        "display_name": "Qwen3.8-Flash-Next Flash-Next [RadixArk/Qwen3.8-Flash-Next-NVFP4] — 125B main + 51B PLE / 6B active (Qwen3.8-Flash-Next sparse MoE) — NVFP4 — 262144-token context — sha256:56d617b9008714d82b491a73c3fc8f86501a2a4dcd17f0b883359762f1af3e17",
+        "canonical_name": "Qwen3.8-Flash-Next",
+        "source_model": "RadixArk/Qwen3.8-Flash-Next-NVFP4",
+        "source_url": "https://huggingface.co/RadixArk/Qwen3.8-Flash-Next-NVFP4",
+        "version": "Flash-Next",
+        "parameter_variant": "125B main + 51B PLE / 6B active",
+        "architecture": "Qwen3.8-Flash-Next sparse MoE",
+        "quantization": "NVFP4",
+        "context_length": 262144,
+        "immutable_digest": "sha256:56d617b9008714d82b491a73c3fc8f86501a2a4dcd17f0b883359762f1af3e17",
         "runtime_variant": "reasoning=none"
       },
-      "runtime_alias": "deepseek-v4-flash",
+      "runtime_alias": "qwen3.8-flash-next",
       "benchmark_track": "primary-deployment",
       "reasoning_policy_selection_mode": "configured",
       "reasoning_policy": "off",
       "profile": "standard",
-      "profile_version": "gx10-qualification-v4",
-      "scoring_version": "gx10-qualification-v4",
+      "profile_version": "gx10-qualification-v5",
+      "scoring_version": "gx10-qualification-v5",
       "outcome": "QUALIFIED",
       "result_validity": "VALID",
       "profile_decision": "MEETS_PROFILE",
-      "overall_score": 83.64,
+      "overall_score": 94.73,
       "component_scores": {
-        "coding": 70.4,
+        "coding": 93.6,
         "hermes": 100.0,
-        "tool_instruction": 80.0,
-        "reliability": 84.8,
+        "tool_instruction": 83.333,
+        "reliability": 97.9,
         "performance": 100.0
       },
-      "duration_seconds": 1755.01,
-      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); DS4 0.6.5; reasoning=off",
-      "upstream_pin_set": "pins-86f0df70c02c"
-    }
-  ],
-  "evaluated_not_qualified": [
-    {
-      "rank": null,
-      "run_id": "20260828T165233Z-ornith15-q8-latest-330554b2-standard",
-      "run_count": 1,
-      "benchmark_date": "2026-08-28",
-      "started_at": "2026-08-28T16:52:33Z",
-      "completed_at": "2026-08-28T17:13:52Z",
-      "model_identity": {
-        "status": "COMPLETE",
-        "display_name": "Ornith-1.5 1.5 [ornith-ai/Ornith-1.5-35B-A3B] — 35.5B (qwen35moe) — Q8_0 — 262144-token context — sha256:c7c57f189918400a4b4193530cceec9136f95c019357de02abc61018f8bad485",
-        "canonical_name": "Ornith-1.5",
-        "source_model": "ornith-ai/Ornith-1.5-35B-A3B",
-        "source_url": "https://huggingface.co/ornith-ai/Ornith-1.5-35B-A3B",
-        "version": "1.5",
-        "parameter_variant": "35.5B",
-        "architecture": "qwen35moe",
-        "quantization": "Q8_0",
-        "context_length": 262144,
-        "immutable_digest": "sha256:c7c57f189918400a4b4193530cceec9136f95c019357de02abc61018f8bad485",
-        "runtime_variant": "reasoning=none"
+      "infermark_c1": {
+        "short": {
+          "generation_tokens_per_second": 16.33,
+          "generation_tokens_per_second_source": "sparkbench-v6.8-tier2-single-stream",
+          "prefill_tokens_per_second": 1116.0,
+          "mean_time_to_first_token_seconds": 0.913,
+          "estimated_visible_generation_chunks_per_second": 16.443534629915586,
+          "mean_time_to_first_visible_chunk_seconds": 0.3124338157164554,
+          "end_to_end_visible_output_chunks_per_second": 13.94683099606713
+        },
+        "medium": {
+          "generation_tokens_per_second": null,
+          "generation_tokens_per_second_source": null,
+          "prefill_tokens_per_second": null,
+          "mean_time_to_first_token_seconds": null,
+          "estimated_visible_generation_chunks_per_second": 16.500495457737475,
+          "mean_time_to_first_visible_chunk_seconds": 0.22597381728701293,
+          "end_to_end_visible_output_chunks_per_second": 14.845465085346943
+        }
       },
-      "runtime_alias": "ornith15-q8:latest",
-      "benchmark_track": "primary-deployment",
-      "reasoning_policy_selection_mode": "configured",
-      "reasoning_policy": "off",
-      "profile": "standard",
-      "profile_version": "gx10-qualification-v4",
-      "scoring_version": "gx10-qualification-v4",
-      "outcome": "NOT_QUALIFIED",
-      "result_validity": "VALID",
-      "profile_decision": "DOES_NOT_MEET_PROFILE",
-      "overall_score": 83.67,
-      "component_scores": {
-        "coding": 69.2,
-        "hermes": 100.0,
-        "tool_instruction": 86.667,
-        "reliability": 79.9,
-        "performance": 100.0
-      },
-      "duration_seconds": 1279.432,
-      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.33.1; reasoning=off",
-      "upstream_pin_set": "pins-86f0df70c02c"
+      "duration_seconds": 7853.017,
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); vLLM; reasoning=off; mtp=off; kv=BF16/default",
+      "upstream_pin_set": "pins-2bbda99377d5"
     },
     {
-      "rank": null,
-      "run_id": "20260828T003405Z-coder-uncens-256k-latest-ed8dc6ee-standard",
+      "rank": 2,
+      "run_id": "20260902T151036Z-coder-uncens-256k-latest-ed8dc6ee-standard",
       "run_count": 1,
-      "benchmark_date": "2026-08-28",
-      "started_at": "2026-08-28T00:34:05Z",
-      "completed_at": "2026-08-28T01:41:24Z",
+      "benchmark_date": "2026-09-02",
+      "started_at": "2026-09-02T15:10:36Z",
+      "completed_at": "2026-09-02T16:12:44Z",
       "model_identity": {
         "status": "COMPLETE",
         "display_name": "Laguna-S-2.1-Uncensored APEX 2.1 [Laguna-S-2.1-Uncensored APEX] — 117.6B (laguna) — Q6_K — 262144-token context — sha256:ea34631ee5c00f9acd0182cb9503098e96c551e3841bf537bbc69a4576aea84b",
@@ -177,73 +174,178 @@
       "reasoning_policy_selection_mode": "configured",
       "reasoning_policy": "effort:high",
       "profile": "standard",
-      "profile_version": "gx10-qualification-v4",
-      "scoring_version": "gx10-qualification-v4",
+      "profile_version": "gx10-qualification-v5",
+      "scoring_version": "gx10-qualification-v5",
+      "outcome": "QUALIFIED",
+      "result_validity": "VALID",
+      "profile_decision": "MEETS_PROFILE",
+      "overall_score": 89.42,
+      "component_scores": {
+        "coding": 88.6,
+        "hermes": 100.0,
+        "tool_instruction": 80.0,
+        "reliability": 94.8,
+        "performance": 50.0
+      },
+      "infermark_c1": {
+        "short": {
+          "generation_tokens_per_second": 26.72,
+          "generation_tokens_per_second_source": "sparkbench-v6.8-tier2-single-stream",
+          "prefill_tokens_per_second": 653.3,
+          "mean_time_to_first_token_seconds": 1.566,
+          "estimated_visible_generation_chunks_per_second": null,
+          "mean_time_to_first_visible_chunk_seconds": null,
+          "end_to_end_visible_output_chunks_per_second": 0.0
+        },
+        "medium": {
+          "generation_tokens_per_second": null,
+          "generation_tokens_per_second_source": null,
+          "prefill_tokens_per_second": null,
+          "mean_time_to_first_token_seconds": null,
+          "estimated_visible_generation_chunks_per_second": 26.37972039128229,
+          "mean_time_to_first_visible_chunk_seconds": 0.13674494569810727,
+          "end_to_end_visible_output_chunks_per_second": 24.280049600332188
+        }
+      },
+      "duration_seconds": 3728.221,
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.33.1",
+      "upstream_pin_set": "pins-2bbda99377d5"
+    }
+  ],
+  "evaluated_not_qualified": [
+    {
+      "rank": null,
+      "run_id": "20260902T172340Z-deepseek-v4-flash-f61ff5cf-standard",
+      "run_count": 1,
+      "benchmark_date": "2026-09-02",
+      "started_at": "2026-09-02T17:23:40Z",
+      "completed_at": "2026-09-02T18:23:33Z",
+      "model_identity": {
+        "status": "COMPLETE",
+        "display_name": "DeepSeek V4 Flash V4-Flash [DeepSeek-V4-Flash] — DeepSeek-V4-Flash (deepseek) — DS4-GGUF — 524288-token context — sha256:ca22ae2f838e14077c22bc1c1417b71b45b5e5a3687bd96c2ac6e17fdb6261c0",
+        "canonical_name": "DeepSeek V4 Flash",
+        "source_model": "DeepSeek-V4-Flash",
+        "source_url": null,
+        "version": "V4-Flash",
+        "parameter_variant": "DeepSeek-V4-Flash",
+        "architecture": "deepseek",
+        "quantization": "DS4-GGUF",
+        "context_length": 524288,
+        "immutable_digest": "sha256:ca22ae2f838e14077c22bc1c1417b71b45b5e5a3687bd96c2ac6e17fdb6261c0",
+        "runtime_variant": "reasoning=none"
+      },
+      "runtime_alias": "deepseek-v4-flash",
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "off",
+      "profile": "standard",
+      "profile_version": "gx10-qualification-v5",
+      "scoring_version": "gx10-qualification-v5",
       "outcome": "NOT_QUALIFIED",
       "result_validity": "VALID",
       "profile_decision": "DOES_NOT_MEET_PROFILE",
-      "overall_score": 73.727,
+      "overall_score": 91.86,
       "component_scores": {
-        "coding": 51.4,
+        "coding": 88.2,
         "hermes": 100.0,
-        "tool_instruction": 84.444,
-        "reliability": 80.0,
-        "performance": 50.0
+        "tool_instruction": 80.0,
+        "reliability": 95.8,
+        "performance": 100.0
       },
-      "duration_seconds": 4038.964,
-      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15",
-      "upstream_pin_set": "pins-86f0df70c02c"
+      "infermark_c1": {
+        "short": {
+          "generation_tokens_per_second": 25.32,
+          "generation_tokens_per_second_source": "sparkbench-v6.8-tier2-single-stream",
+          "prefill_tokens_per_second": 898.5,
+          "mean_time_to_first_token_seconds": 1.122,
+          "estimated_visible_generation_chunks_per_second": 23.832451150330762,
+          "mean_time_to_first_visible_chunk_seconds": 0.20737097482196987,
+          "end_to_end_visible_output_chunks_per_second": 20.996901436490553
+        },
+        "medium": {
+          "generation_tokens_per_second": null,
+          "generation_tokens_per_second_source": null,
+          "prefill_tokens_per_second": null,
+          "mean_time_to_first_token_seconds": null,
+          "estimated_visible_generation_chunks_per_second": 21.808812985038028,
+          "mean_time_to_first_visible_chunk_seconds": 0.25059588028428453,
+          "end_to_end_visible_output_chunks_per_second": 18.908263387727107
+        }
+      },
+      "duration_seconds": 3592.873,
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); DS4 0.6.5; reasoning=off",
+      "upstream_pin_set": "pins-2bbda99377d5"
     },
     {
       "rank": null,
-      "run_id": "20260827T210708Z-qwen38-q8-262k-latest-3271673b-standard",
+      "run_id": "20260902T161250Z-agent-main-latest-0960376c-standard",
       "run_count": 1,
-      "benchmark_date": "2026-08-27",
-      "started_at": "2026-08-27T21:07:08Z",
-      "completed_at": "2026-08-28T00:33:58Z",
+      "benchmark_date": "2026-09-02",
+      "started_at": "2026-09-02T16:12:50Z",
+      "completed_at": "2026-09-02T17:23:01Z",
       "model_identity": {
         "status": "COMPLETE",
-        "display_name": "Qwen3.8 0814 [qwen3.8:27b-q8_0] — 27.3B (qwen35) — Q8_0 — 262144-token context — sha256:4ab95509a27d7a3f23dcc612a660858e9f28c1a5322bd9240f34559bcf888988",
-        "canonical_name": "Qwen3.8",
-        "source_model": "qwen3.8:27b-q8_0",
+        "display_name": "Qwen3.6-35B-A3B 3.6 [Qwen3.6-35B-A3B] — 36.0B (qwen35moe) — Q8_0 — 65536-token context — sha256:0218f872e86baa9c7610509f27db36a7bc52eea7afee24688f81ca74ffcb6c77",
+        "canonical_name": "Qwen3.6-35B-A3B",
+        "source_model": "Qwen3.6-35B-A3B",
         "source_url": null,
-        "version": "0814",
-        "parameter_variant": "27.3B",
-        "architecture": "qwen35",
+        "version": "3.6",
+        "parameter_variant": "36.0B",
+        "architecture": "qwen35moe",
         "quantization": "Q8_0",
-        "context_length": 262144,
-        "immutable_digest": "sha256:4ab95509a27d7a3f23dcc612a660858e9f28c1a5322bd9240f34559bcf888988",
+        "context_length": 65536,
+        "immutable_digest": "sha256:0218f872e86baa9c7610509f27db36a7bc52eea7afee24688f81ca74ffcb6c77",
         "runtime_variant": "reasoning=medium"
       },
-      "runtime_alias": "qwen38-q8-262k:latest",
+      "runtime_alias": "agent-main:latest",
       "benchmark_track": "primary-deployment",
       "reasoning_policy_selection_mode": "configured",
       "reasoning_policy": "effort:medium",
       "profile": "standard",
-      "profile_version": "gx10-qualification-v4",
-      "scoring_version": "gx10-qualification-v4",
+      "profile_version": "gx10-qualification-v5",
+      "scoring_version": "gx10-qualification-v5",
       "outcome": "NOT_QUALIFIED",
       "result_validity": "VALID",
       "profile_decision": "DOES_NOT_MEET_PROFILE",
-      "overall_score": 60.534,
+      "overall_score": 76.783,
       "component_scores": {
-        "coding": 17.8,
-        "hermes": 100.0,
-        "tool_instruction": 87.778,
-        "reliability": 88.0,
-        "performance": 28.939
+        "coding": 89.4,
+        "hermes": 50.0,
+        "tool_instruction": 92.222,
+        "reliability": 96.9,
+        "performance": 50.0
       },
-      "duration_seconds": 12409.596,
-      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15",
-      "upstream_pin_set": "pins-86f0df70c02c"
+      "infermark_c1": {
+        "short": {
+          "generation_tokens_per_second": 53.9,
+          "generation_tokens_per_second_source": "sparkbench-v6.8-tier2-single-stream",
+          "prefill_tokens_per_second": 1540.3,
+          "mean_time_to_first_token_seconds": 0.661,
+          "estimated_visible_generation_chunks_per_second": null,
+          "mean_time_to_first_visible_chunk_seconds": null,
+          "end_to_end_visible_output_chunks_per_second": 0.0
+        },
+        "medium": {
+          "generation_tokens_per_second": null,
+          "generation_tokens_per_second_source": null,
+          "prefill_tokens_per_second": null,
+          "mean_time_to_first_token_seconds": null,
+          "estimated_visible_generation_chunks_per_second": null,
+          "mean_time_to_first_visible_chunk_seconds": null,
+          "end_to_end_visible_output_chunks_per_second": 0.0
+        }
+      },
+      "duration_seconds": 4210.753,
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.33.1",
+      "upstream_pin_set": "pins-2bbda99377d5"
     },
     {
       "rank": null,
-      "run_id": "20260827T195214Z-coder-uncens-latest-ba5d22c1-standard",
+      "run_id": "20260902T140420Z-coder-uncens-latest-ba5d22c1-standard",
       "run_count": 1,
-      "benchmark_date": "2026-08-27",
-      "started_at": "2026-08-27T19:52:14Z",
-      "completed_at": "2026-08-27T21:07:02Z",
+      "benchmark_date": "2026-09-02",
+      "started_at": "2026-09-02T14:04:20Z",
+      "completed_at": "2026-09-02T15:10:29Z",
       "model_identity": {
         "status": "COMPLETE",
         "display_name": "Laguna-S-2.1-Uncensored APEX 2.1 [Laguna-S-2.1-Uncensored APEX] — 117.6B (laguna) — Q6_K — 131072-token context — sha256:50197a047af0f7c198929eb80bbd4bb5a44cd43ca878f5241c846ffbf3ee9a7b",
@@ -263,22 +365,168 @@
       "reasoning_policy_selection_mode": "configured",
       "reasoning_policy": "effort:high",
       "profile": "standard",
-      "profile_version": "gx10-qualification-v4",
-      "scoring_version": "gx10-qualification-v4",
+      "profile_version": "gx10-qualification-v5",
+      "scoring_version": "gx10-qualification-v5",
       "outcome": "NOT_QUALIFIED",
       "result_validity": "VALID",
       "profile_decision": "DOES_NOT_MEET_PROFILE",
-      "overall_score": 54.313,
+      "overall_score": 76.42,
       "component_scores": {
-        "coding": 40.2,
+        "coding": 91.7,
         "hermes": 50.0,
-        "tool_instruction": 82.222,
-        "reliability": 84.0,
+        "tool_instruction": 86.667,
+        "reliability": 92.4,
         "performance": 50.0
       },
-      "duration_seconds": 4487.408,
-      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15",
-      "upstream_pin_set": "pins-86f0df70c02c"
+      "infermark_c1": {
+        "short": {
+          "generation_tokens_per_second": 26.38,
+          "generation_tokens_per_second_source": "sparkbench-v6.8-tier2-single-stream",
+          "prefill_tokens_per_second": 777.5,
+          "mean_time_to_first_token_seconds": 1.316,
+          "estimated_visible_generation_chunks_per_second": null,
+          "mean_time_to_first_visible_chunk_seconds": null,
+          "end_to_end_visible_output_chunks_per_second": 0.0
+        },
+        "medium": {
+          "generation_tokens_per_second": null,
+          "generation_tokens_per_second_source": null,
+          "prefill_tokens_per_second": null,
+          "mean_time_to_first_token_seconds": null,
+          "estimated_visible_generation_chunks_per_second": 25.397306100105993,
+          "mean_time_to_first_visible_chunk_seconds": 0.13360028178431094,
+          "end_to_end_visible_output_chunks_per_second": 23.99350764608156
+        }
+      },
+      "duration_seconds": 3969.546,
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.33.1",
+      "upstream_pin_set": "pins-2bbda99377d5"
+    },
+    {
+      "rank": null,
+      "run_id": "20260902T002203Z-ornith15-q8-latest-330554b2-standard",
+      "run_count": 1,
+      "benchmark_date": "2026-09-02",
+      "started_at": "2026-09-02T00:22:03Z",
+      "completed_at": "2026-09-02T01:00:13Z",
+      "model_identity": {
+        "status": "COMPLETE",
+        "display_name": "Ornith-1.5 1.5 [ornith-ai/Ornith-1.5-35B-A3B] — 35.5B (qwen35moe) — Q8_0 — 262144-token context — sha256:c7c57f189918400a4b4193530cceec9136f95c019357de02abc61018f8bad485",
+        "canonical_name": "Ornith-1.5",
+        "source_model": "ornith-ai/Ornith-1.5-35B-A3B",
+        "source_url": "https://huggingface.co/ornith-ai/Ornith-1.5-35B-A3B",
+        "version": "1.5",
+        "parameter_variant": "35.5B",
+        "architecture": "qwen35moe",
+        "quantization": "Q8_0",
+        "context_length": 262144,
+        "immutable_digest": "sha256:c7c57f189918400a4b4193530cceec9136f95c019357de02abc61018f8bad485",
+        "runtime_variant": "reasoning=none"
+      },
+      "runtime_alias": "ornith15-q8:latest",
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "off",
+      "profile": "standard",
+      "profile_version": "gx10-qualification-v5",
+      "scoring_version": "gx10-qualification-v5",
+      "outcome": "NOT_QUALIFIED",
+      "result_validity": "VALID",
+      "profile_decision": "DOES_NOT_MEET_PROFILE",
+      "overall_score": 75.09,
+      "component_scores": {
+        "coding": 81.4,
+        "hermes": 50.0,
+        "tool_instruction": 86.667,
+        "reliability": 95.3,
+        "performance": 100.0
+      },
+      "infermark_c1": {
+        "short": {
+          "generation_tokens_per_second": 58.1,
+          "generation_tokens_per_second_source": "sparkbench-v6.8-tier2-single-stream",
+          "prefill_tokens_per_second": 1587.5,
+          "mean_time_to_first_token_seconds": 0.642,
+          "estimated_visible_generation_chunks_per_second": 56.10920779397957,
+          "mean_time_to_first_visible_chunk_seconds": 0.0671567756216973,
+          "end_to_end_visible_output_chunks_per_second": 50.33600743651541
+        },
+        "medium": {
+          "generation_tokens_per_second": null,
+          "generation_tokens_per_second_source": null,
+          "prefill_tokens_per_second": null,
+          "mean_time_to_first_token_seconds": null,
+          "estimated_visible_generation_chunks_per_second": 55.5326223674469,
+          "mean_time_to_first_visible_chunk_seconds": 0.08158453926444054,
+          "end_to_end_visible_output_chunks_per_second": 48.84245753328819
+        }
+      },
+      "duration_seconds": 2290.564,
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.33.1; reasoning=off",
+      "upstream_pin_set": "pins-2bbda99377d5"
+    },
+    {
+      "rank": null,
+      "run_id": "20260901T184601Z-qwen38-q8-262k-latest-3271673b-standard",
+      "run_count": 1,
+      "benchmark_date": "2026-09-01",
+      "started_at": "2026-09-01T18:46:01Z",
+      "completed_at": "2026-09-02T00:20:51Z",
+      "model_identity": {
+        "status": "COMPLETE",
+        "display_name": "Qwen3.8 0814 [qwen3.8:27b-q8_0] — 27.3B (qwen35) — Q8_0 — 262144-token context — sha256:4ab95509a27d7a3f23dcc612a660858e9f28c1a5322bd9240f34559bcf888988",
+        "canonical_name": "Qwen3.8",
+        "source_model": "qwen3.8:27b-q8_0",
+        "source_url": null,
+        "version": "0814",
+        "parameter_variant": "27.3B",
+        "architecture": "qwen35",
+        "quantization": "Q8_0",
+        "context_length": 262144,
+        "immutable_digest": "sha256:4ab95509a27d7a3f23dcc612a660858e9f28c1a5322bd9240f34559bcf888988",
+        "runtime_variant": "reasoning=medium"
+      },
+      "runtime_alias": "qwen38-q8-262k:latest",
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "effort:medium",
+      "profile": "standard",
+      "profile_version": "gx10-qualification-v5",
+      "scoring_version": "gx10-qualification-v5",
+      "outcome": "NOT_QUALIFIED",
+      "result_validity": "VALID",
+      "profile_decision": "DOES_NOT_MEET_PROFILE",
+      "overall_score": 73.802,
+      "component_scores": {
+        "coding": 88.2,
+        "hermes": 50.0,
+        "tool_instruction": 88.889,
+        "reliability": 92.9,
+        "performance": 17.981
+      },
+      "infermark_c1": {
+        "short": {
+          "generation_tokens_per_second": 7.69,
+          "generation_tokens_per_second_source": "sparkbench-v6.8-tier2-single-stream",
+          "prefill_tokens_per_second": 624.3,
+          "mean_time_to_first_token_seconds": 1.632,
+          "estimated_visible_generation_chunks_per_second": 7.6916780161605685,
+          "mean_time_to_first_visible_chunk_seconds": 10.088436887444308,
+          "end_to_end_visible_output_chunks_per_second": 2.2783511941337324
+        },
+        "medium": {
+          "generation_tokens_per_second": null,
+          "generation_tokens_per_second_source": null,
+          "prefill_tokens_per_second": null,
+          "mean_time_to_first_token_seconds": null,
+          "estimated_visible_generation_chunks_per_second": 7.6433224964456015,
+          "mean_time_to_first_visible_chunk_seconds": 9.230187667378535,
+          "end_to_end_visible_output_chunks_per_second": 2.6289851033445415
+        }
+      },
+      "duration_seconds": 20089.765,
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.33.1",
+      "upstream_pin_set": "pins-2bbda99377d5"
     }
   ],
   "diagnostics": [
@@ -297,6 +545,15 @@
       "benchmark_track": null,
       "reasoning_policy_selection_mode": null,
       "reasoning_policy": null,
+      "overall_score": null,
+      "component_scores": {
+        "coding": null,
+        "hermes": null,
+        "tool_instruction": null,
+        "reliability": null,
+        "performance": null
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15",
       "reason": "infrastructure error; run is not marked COMPLETE; overall score is unavailable; missing compatibility metadata: qualification generation, scoring version, reasoning policy, reasoning policy selection, benchmark track, reasoning policy comparison rule, direct-probe contract, direct-probe max tokens, scoring weights"
     },
     {
@@ -314,6 +571,15 @@
       "benchmark_track": null,
       "reasoning_policy_selection_mode": null,
       "reasoning_policy": null,
+      "overall_score": 27.705,
+      "component_scores": {
+        "coding": null,
+        "hermes": 0.0,
+        "tool_instruction": 100.0,
+        "reliability": 0.0,
+        "performance": 32.466
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15; reasoning=medium",
       "reason": "smoke results are never ranked with standard qualification"
     },
     {
@@ -331,6 +597,15 @@
       "benchmark_track": null,
       "reasoning_policy_selection_mode": null,
       "reasoning_policy": null,
+      "overall_score": 93.078,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 16.939
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15; reasoning=medium",
       "reason": "smoke results are never ranked with standard qualification"
     },
     {
@@ -348,6 +623,15 @@
       "benchmark_track": null,
       "reasoning_policy_selection_mode": null,
       "reasoning_policy": null,
+      "overall_score": null,
+      "component_scores": {
+        "coding": null,
+        "hermes": null,
+        "tool_instruction": null,
+        "reliability": null,
+        "performance": null
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15",
       "reason": "infrastructure error; run is not marked COMPLETE; overall score is unavailable; missing compatibility metadata: qualification generation, scoring version, reasoning policy, reasoning policy selection, benchmark track, reasoning policy comparison rule, direct-probe contract, direct-probe max tokens, scoring weights"
     },
     {
@@ -365,6 +649,15 @@
       "benchmark_track": null,
       "reasoning_policy_selection_mode": null,
       "reasoning_policy": null,
+      "overall_score": null,
+      "component_scores": {
+        "coding": null,
+        "hermes": null,
+        "tool_instruction": null,
+        "reliability": null,
+        "performance": null
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15",
       "reason": "infrastructure error; run is not marked COMPLETE; overall score is unavailable; missing compatibility metadata: qualification generation, scoring version, reasoning policy, reasoning policy selection, benchmark track, reasoning policy comparison rule, direct-probe contract, direct-probe max tokens, scoring weights"
     },
     {
@@ -382,6 +675,15 @@
       "benchmark_track": null,
       "reasoning_policy_selection_mode": null,
       "reasoning_policy": null,
+      "overall_score": null,
+      "component_scores": {
+        "coding": null,
+        "hermes": null,
+        "tool_instruction": null,
+        "reliability": null,
+        "performance": null
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15",
       "reason": "infrastructure error; run is not marked COMPLETE; overall score is unavailable; missing compatibility metadata: qualification generation, scoring version, reasoning policy, reasoning policy selection, benchmark track, reasoning policy comparison rule, direct-probe contract, direct-probe max tokens, scoring weights"
     },
     {
@@ -399,6 +701,15 @@
       "benchmark_track": "historical",
       "reasoning_policy_selection_mode": "legacy-unspecified",
       "reasoning_policy": "legacy-thinking-control-unspecified",
+      "overall_score": 46.103,
+      "component_scores": {
+        "coding": 17.8,
+        "hermes": 50.0,
+        "tool_instruction": 87.778,
+        "reliability": 88.6,
+        "performance": 39.128
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15; reasoning=medium",
       "reason": "historical v2 claimed thinking-off without uniformly serializing Ollama's supported control; rerun under v4"
     },
     {
@@ -416,6 +727,15 @@
       "benchmark_track": null,
       "reasoning_policy_selection_mode": null,
       "reasoning_policy": null,
+      "overall_score": null,
+      "component_scores": {
+        "coding": null,
+        "hermes": null,
+        "tool_instruction": null,
+        "reliability": null,
+        "performance": null
+      },
+      "hardware_runtime": "deployment metadata unavailable",
       "reason": "results.json is missing"
     },
     {
@@ -433,6 +753,15 @@
       "benchmark_track": null,
       "reasoning_policy_selection_mode": null,
       "reasoning_policy": null,
+      "overall_score": null,
+      "component_scores": {
+        "coding": null,
+        "hermes": null,
+        "tool_instruction": null,
+        "reliability": null,
+        "performance": null
+      },
+      "hardware_runtime": "deployment metadata unavailable",
       "reason": "results.json is missing"
     },
     {
@@ -450,6 +779,15 @@
       "benchmark_track": null,
       "reasoning_policy_selection_mode": null,
       "reasoning_policy": null,
+      "overall_score": null,
+      "component_scores": {
+        "coding": null,
+        "hermes": null,
+        "tool_instruction": null,
+        "reliability": null,
+        "performance": null
+      },
+      "hardware_runtime": "deployment metadata unavailable",
       "reason": "results.json is missing"
     },
     {
@@ -467,6 +805,15 @@
       "benchmark_track": null,
       "reasoning_policy_selection_mode": null,
       "reasoning_policy": null,
+      "overall_score": null,
+      "component_scores": {
+        "coding": null,
+        "hermes": null,
+        "tool_instruction": null,
+        "reliability": null,
+        "performance": null
+      },
+      "hardware_runtime": "deployment metadata unavailable",
       "reason": "results.json is missing"
     },
     {
@@ -484,6 +831,15 @@
       "benchmark_track": null,
       "reasoning_policy_selection_mode": null,
       "reasoning_policy": null,
+      "overall_score": null,
+      "component_scores": {
+        "coding": null,
+        "hermes": null,
+        "tool_instruction": null,
+        "reliability": null,
+        "performance": null
+      },
+      "hardware_runtime": "deployment metadata unavailable",
       "reason": "results.json is missing"
     },
     {
@@ -501,6 +857,15 @@
       "benchmark_track": "historical",
       "reasoning_policy_selection_mode": "legacy-unspecified",
       "reasoning_policy": "legacy-thinking-control-unspecified",
+      "overall_score": 95.833,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 50.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15; reasoning=medium",
       "reason": "historical v2 claimed thinking-off without uniformly serializing Ollama's supported control; rerun under v4"
     },
     {
@@ -518,6 +883,15 @@
       "benchmark_track": "historical",
       "reasoning_policy_selection_mode": "legacy-unspecified",
       "reasoning_policy": "legacy-thinking-control-unspecified",
+      "overall_score": 95.833,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 50.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15; reasoning=high",
       "reason": "historical v2 claimed thinking-off without uniformly serializing Ollama's supported control; rerun under v4"
     },
     {
@@ -535,6 +909,15 @@
       "benchmark_track": "historical",
       "reasoning_policy_selection_mode": "legacy-unspecified",
       "reasoning_policy": "legacy-thinking-control-unspecified",
+      "overall_score": 95.833,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 50.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15; reasoning=high",
       "reason": "historical v2 claimed thinking-off without uniformly serializing Ollama's supported control; rerun under v4"
     },
     {
@@ -552,6 +935,15 @@
       "benchmark_track": "historical",
       "reasoning_policy_selection_mode": "legacy-unspecified",
       "reasoning_policy": "legacy-thinking-control-unspecified",
+      "overall_score": null,
+      "component_scores": {
+        "coding": null,
+        "hermes": null,
+        "tool_instruction": null,
+        "reliability": null,
+        "performance": null
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15",
       "reason": "completed upstream evaluation was quarantined and cannot be ranked; run is not marked COMPLETE; overall score is unavailable; missing compatibility metadata: scoring weights; the historical v2 request also predates corrected thinking control"
     },
     {
@@ -569,12 +961,21 @@
       "benchmark_track": "historical",
       "reasoning_policy_selection_mode": "legacy-unspecified",
       "reasoning_policy": "off",
+      "overall_score": null,
+      "component_scores": {
+        "coding": null,
+        "hermes": null,
+        "tool_instruction": null,
+        "reliability": null,
+        "performance": null
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15",
       "reason": "infrastructure error; run is not marked COMPLETE; overall score is unavailable; missing compatibility metadata: scoring weights"
     },
     {
       "run_id": "20260827T025027Z-agent-main-latest-0960376c-smoke",
       "benchmark_date": "2026-08-27",
-      "status": "SMOKE_ONLY",
+      "status": "HISTORICAL_COHORT",
       "qualification_outcome": "QUALIFIED",
       "result_validity": "VALID",
       "profile_decision": "MEETS_PROFILE",
@@ -586,12 +987,21 @@
       "benchmark_track": "controlled-policy",
       "reasoning_policy_selection_mode": "explicit",
       "reasoning_policy": "off",
-      "reason": "smoke results are never ranked with standard qualification"
+      "overall_score": 97.202,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 66.428
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15; reasoning=off",
+      "reason": "historical qualification generation; visible for audit but never ranked against gx10-qualification-v5"
     },
     {
       "run_id": "20260827T034426Z-agent-main-latest-0960376c-smoke",
       "benchmark_date": "2026-08-27",
-      "status": "SMOKE_ONLY",
+      "status": "HISTORICAL_COHORT",
       "qualification_outcome": "NOT_QUALIFIED",
       "result_validity": "VALID",
       "profile_decision": "DOES_NOT_MEET_PROFILE",
@@ -603,12 +1013,21 @@
       "benchmark_track": "primary-deployment",
       "reasoning_policy_selection_mode": "configured",
       "reasoning_policy": "effort:medium",
-      "reason": "smoke results are never ranked with standard qualification"
+      "overall_score": 95.833,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 50.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15",
+      "reason": "historical qualification generation; visible for audit but never ranked against gx10-qualification-v5"
     },
     {
       "run_id": "20260827T041944Z-agent-main-latest-0960376c-smoke",
       "benchmark_date": "2026-08-27",
-      "status": "SMOKE_ONLY",
+      "status": "HISTORICAL_COHORT",
       "qualification_outcome": "NOT_QUALIFIED",
       "result_validity": "VALID",
       "profile_decision": "DOES_NOT_MEET_PROFILE",
@@ -620,7 +1039,16 @@
       "benchmark_track": "primary-deployment",
       "reasoning_policy_selection_mode": "configured",
       "reasoning_policy": "effort:medium",
-      "reason": "smoke results are never ranked with standard qualification"
+      "overall_score": 95.833,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 50.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15",
+      "reason": "historical qualification generation; visible for audit but never ranked against gx10-qualification-v5"
     },
     {
       "run_id": "20260827T153654Z-coder-uncens-latest-ba5d22c1-smoke",
@@ -637,12 +1065,21 @@
       "benchmark_track": null,
       "reasoning_policy_selection_mode": null,
       "reasoning_policy": null,
+      "overall_score": null,
+      "component_scores": {
+        "coding": null,
+        "hermes": null,
+        "tool_instruction": null,
+        "reliability": null,
+        "performance": null
+      },
+      "hardware_runtime": "deployment metadata unavailable",
       "reason": "results.json is missing"
     },
     {
       "run_id": "20260827T154143Z-coder-uncens-latest-ba5d22c1-smoke",
       "benchmark_date": "2026-08-27",
-      "status": "SMOKE_ONLY",
+      "status": "HISTORICAL_COHORT",
       "qualification_outcome": "QUALIFIED",
       "result_validity": "VALID",
       "profile_decision": "MEETS_PROFILE",
@@ -654,12 +1091,21 @@
       "benchmark_track": "primary-deployment",
       "reasoning_policy_selection_mode": "configured",
       "reasoning_policy": "effort:high",
-      "reason": "smoke results are never ranked with standard qualification"
+      "overall_score": 95.833,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 50.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15",
+      "reason": "historical qualification generation; visible for audit but never ranked against gx10-qualification-v5"
     },
     {
       "run_id": "20260827T155140Z-coder-uncens-256k-latest-ed8dc6ee-smoke",
       "benchmark_date": "2026-08-27",
-      "status": "SMOKE_ONLY",
+      "status": "HISTORICAL_COHORT",
       "qualification_outcome": "QUALIFIED",
       "result_validity": "VALID",
       "profile_decision": "MEETS_PROFILE",
@@ -671,12 +1117,21 @@
       "benchmark_track": "primary-deployment",
       "reasoning_policy_selection_mode": "configured",
       "reasoning_policy": "effort:high",
-      "reason": "smoke results are never ranked with standard qualification"
+      "overall_score": 95.833,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 50.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15",
+      "reason": "historical qualification generation; visible for audit but never ranked against gx10-qualification-v5"
     },
     {
       "run_id": "20260827T155626Z-qwen38-q8-262k-latest-3271673b-smoke",
       "benchmark_date": "2026-08-27",
-      "status": "SMOKE_ONLY",
+      "status": "HISTORICAL_COHORT",
       "qualification_outcome": "QUALIFIED",
       "result_validity": "VALID",
       "profile_decision": "MEETS_PROFILE",
@@ -688,12 +1143,99 @@
       "benchmark_track": "primary-deployment",
       "reasoning_policy_selection_mode": "configured",
       "reasoning_policy": "effort:medium",
-      "reason": "smoke results are never ranked with standard qualification"
+      "overall_score": 95.833,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 50.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15",
+      "reason": "historical qualification generation; visible for audit but never ranked against gx10-qualification-v5"
+    },
+    {
+      "run_id": "20260827T195214Z-coder-uncens-latest-ba5d22c1-standard",
+      "benchmark_date": "2026-08-27",
+      "status": "HISTORICAL_COHORT",
+      "qualification_outcome": "NOT_QUALIFIED",
+      "result_validity": "VALID",
+      "profile_decision": "DOES_NOT_MEET_PROFILE",
+      "profile": "standard",
+      "profile_version": "gx10-qualification-v4",
+      "model_identity": "Laguna-S-2.1-Uncensored APEX 2.1 [Laguna-S-2.1-Uncensored APEX] — 117.6B (laguna) — Q6_K — 131072-token context — sha256:50197a047af0f7c198929eb80bbd4bb5a44cd43ca878f5241c846ffbf3ee9a7b",
+      "runtime_alias": "coder-uncens:latest",
+      "immutable_digest": "sha256:50197a047af0f7c198929eb80bbd4bb5a44cd43ca878f5241c846ffbf3ee9a7b",
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "effort:high",
+      "overall_score": 54.313,
+      "component_scores": {
+        "coding": 40.2,
+        "hermes": 50.0,
+        "tool_instruction": 82.222,
+        "reliability": 84.0,
+        "performance": 50.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15",
+      "reason": "historical qualification generation; visible for audit but never ranked against gx10-qualification-v5"
+    },
+    {
+      "run_id": "20260827T210708Z-qwen38-q8-262k-latest-3271673b-standard",
+      "benchmark_date": "2026-08-27",
+      "status": "HISTORICAL_COHORT",
+      "qualification_outcome": "NOT_QUALIFIED",
+      "result_validity": "VALID",
+      "profile_decision": "DOES_NOT_MEET_PROFILE",
+      "profile": "standard",
+      "profile_version": "gx10-qualification-v4",
+      "model_identity": "Qwen3.8 0814 [qwen3.8:27b-q8_0] — 27.3B (qwen35) — Q8_0 — 262144-token context — sha256:4ab95509a27d7a3f23dcc612a660858e9f28c1a5322bd9240f34559bcf888988",
+      "runtime_alias": "qwen38-q8-262k:latest",
+      "immutable_digest": "sha256:4ab95509a27d7a3f23dcc612a660858e9f28c1a5322bd9240f34559bcf888988",
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "effort:medium",
+      "overall_score": 60.534,
+      "component_scores": {
+        "coding": 17.8,
+        "hermes": 100.0,
+        "tool_instruction": 87.778,
+        "reliability": 88.0,
+        "performance": 28.939
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15",
+      "reason": "historical qualification generation; visible for audit but never ranked against gx10-qualification-v5"
+    },
+    {
+      "run_id": "20260828T003405Z-coder-uncens-256k-latest-ed8dc6ee-standard",
+      "benchmark_date": "2026-08-28",
+      "status": "HISTORICAL_COHORT",
+      "qualification_outcome": "NOT_QUALIFIED",
+      "result_validity": "VALID",
+      "profile_decision": "DOES_NOT_MEET_PROFILE",
+      "profile": "standard",
+      "profile_version": "gx10-qualification-v4",
+      "model_identity": "Laguna-S-2.1-Uncensored APEX 2.1 [Laguna-S-2.1-Uncensored APEX] — 117.6B (laguna) — Q6_K — 262144-token context — sha256:ea34631ee5c00f9acd0182cb9503098e96c551e3841bf537bbc69a4576aea84b",
+      "runtime_alias": "coder-uncens-256k:latest",
+      "immutable_digest": "sha256:ea34631ee5c00f9acd0182cb9503098e96c551e3841bf537bbc69a4576aea84b",
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "effort:high",
+      "overall_score": 73.727,
+      "component_scores": {
+        "coding": 51.4,
+        "hermes": 100.0,
+        "tool_instruction": 84.444,
+        "reliability": 80.0,
+        "performance": 50.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.32.15",
+      "reason": "historical qualification generation; visible for audit but never ranked against gx10-qualification-v5"
     },
     {
       "run_id": "20260828T054045Z-ornith15-q8-latest-330554b2-smoke",
       "benchmark_date": "2026-08-28",
-      "status": "SMOKE_ONLY",
+      "status": "HISTORICAL_COHORT",
       "qualification_outcome": "NOT_QUALIFIED",
       "result_validity": "VALID",
       "profile_decision": "DOES_NOT_MEET_PROFILE",
@@ -705,7 +1247,16 @@
       "benchmark_track": "primary-deployment",
       "reasoning_policy_selection_mode": "configured",
       "reasoning_policy": "native",
-      "reason": "smoke results are never ranked with standard qualification"
+      "overall_score": 95.833,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 50.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.33.1; reasoning=native",
+      "reason": "historical qualification generation; visible for audit but never ranked against gx10-qualification-v5"
     },
     {
       "run_id": "20260828T054302Z-gemma4-31b-it-bf16-58476611-smoke",
@@ -722,12 +1273,21 @@
       "benchmark_track": "primary-deployment",
       "reasoning_policy_selection_mode": "configured",
       "reasoning_policy": "native",
+      "overall_score": null,
+      "component_scores": {
+        "coding": null,
+        "hermes": null,
+        "tool_instruction": null,
+        "reliability": null,
+        "performance": null
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.33.1; reasoning=native",
       "reason": "infrastructure error; run is not marked COMPLETE; overall score is unavailable; missing compatibility metadata: scoring weights"
     },
     {
       "run_id": "20260828T060624Z-ornith15-q8-latest-330554b2-smoke",
       "benchmark_date": "2026-08-28",
-      "status": "SMOKE_ONLY",
+      "status": "HISTORICAL_COHORT",
       "qualification_outcome": "QUALIFIED",
       "result_validity": "VALID",
       "profile_decision": "MEETS_PROFILE",
@@ -739,12 +1299,21 @@
       "benchmark_track": "primary-deployment",
       "reasoning_policy_selection_mode": "configured",
       "reasoning_policy": "off",
-      "reason": "smoke results are never ranked with standard qualification"
+      "overall_score": 100.0,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 100.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.33.1; reasoning=off",
+      "reason": "historical qualification generation; visible for audit but never ranked against gx10-qualification-v5"
     },
     {
       "run_id": "20260828T152614Z-ornith15-q8-latest-330554b2-smoke",
       "benchmark_date": "2026-08-28",
-      "status": "SMOKE_ONLY",
+      "status": "HISTORICAL_COHORT",
       "qualification_outcome": "QUALIFIED",
       "result_validity": "VALID",
       "profile_decision": "MEETS_PROFILE",
@@ -756,7 +1325,16 @@
       "benchmark_track": "primary-deployment",
       "reasoning_policy_selection_mode": "configured",
       "reasoning_policy": "off",
-      "reason": "smoke results are never ranked with standard qualification"
+      "overall_score": 100.0,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 100.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.33.1; reasoning=off",
+      "reason": "historical qualification generation; visible for audit but never ranked against gx10-qualification-v5"
     },
     {
       "run_id": "20260828T152940Z-deepseek-v4-flash-f61ff5cf-smoke",
@@ -773,12 +1351,21 @@
       "benchmark_track": "primary-deployment",
       "reasoning_policy_selection_mode": "configured",
       "reasoning_policy": "off",
+      "overall_score": null,
+      "component_scores": {
+        "coding": null,
+        "hermes": null,
+        "tool_instruction": null,
+        "reliability": null,
+        "performance": null
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); DS4 0.6.5; reasoning=off",
       "reason": "infrastructure error; run is not marked COMPLETE; overall score is unavailable; missing compatibility metadata: scoring weights"
     },
     {
       "run_id": "20260828T154140Z-deepseek-v4-flash-f61ff5cf-smoke",
       "benchmark_date": "2026-08-28",
-      "status": "SMOKE_ONLY",
+      "status": "HISTORICAL_COHORT",
       "qualification_outcome": "QUALIFIED",
       "result_validity": "VALID",
       "profile_decision": "MEETS_PROFILE",
@@ -790,7 +1377,458 @@
       "benchmark_track": "primary-deployment",
       "reasoning_policy_selection_mode": "configured",
       "reasoning_policy": "off",
+      "overall_score": 100.0,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 100.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); DS4 0.6.5; reasoning=off",
+      "reason": "historical qualification generation; visible for audit but never ranked against gx10-qualification-v5"
+    },
+    {
+      "run_id": "20260828T165233Z-ornith15-q8-latest-330554b2-standard",
+      "benchmark_date": "2026-08-28",
+      "status": "HISTORICAL_COHORT",
+      "qualification_outcome": "NOT_QUALIFIED",
+      "result_validity": "VALID",
+      "profile_decision": "DOES_NOT_MEET_PROFILE",
+      "profile": "standard",
+      "profile_version": "gx10-qualification-v4",
+      "model_identity": "Ornith-1.5 1.5 [ornith-ai/Ornith-1.5-35B-A3B] — 35.5B (qwen35moe) — Q8_0 — 262144-token context — sha256:c7c57f189918400a4b4193530cceec9136f95c019357de02abc61018f8bad485",
+      "runtime_alias": "ornith15-q8:latest",
+      "immutable_digest": "sha256:c7c57f189918400a4b4193530cceec9136f95c019357de02abc61018f8bad485",
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "off",
+      "overall_score": 83.67,
+      "component_scores": {
+        "coding": 69.2,
+        "hermes": 100.0,
+        "tool_instruction": 86.667,
+        "reliability": 79.9,
+        "performance": 100.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.33.1; reasoning=off",
+      "reason": "historical qualification generation; visible for audit but never ranked against gx10-qualification-v5"
+    },
+    {
+      "run_id": "20260828T204155Z-deepseek-v4-flash-f61ff5cf-standard",
+      "benchmark_date": "2026-08-28",
+      "status": "HISTORICAL_COHORT",
+      "qualification_outcome": "QUALIFIED",
+      "result_validity": "VALID",
+      "profile_decision": "MEETS_PROFILE",
+      "profile": "standard",
+      "profile_version": "gx10-qualification-v4",
+      "model_identity": "DeepSeek V4 Flash V4-Flash [DeepSeek-V4-Flash] — DeepSeek-V4-Flash (deepseek) — DS4-GGUF — 524288-token context — sha256:ca22ae2f838e14077c22bc1c1417b71b45b5e5a3687bd96c2ac6e17fdb6261c0",
+      "runtime_alias": "deepseek-v4-flash",
+      "immutable_digest": "sha256:ca22ae2f838e14077c22bc1c1417b71b45b5e5a3687bd96c2ac6e17fdb6261c0",
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "off",
+      "overall_score": 83.64,
+      "component_scores": {
+        "coding": 70.4,
+        "hermes": 100.0,
+        "tool_instruction": 80.0,
+        "reliability": 84.8,
+        "performance": 100.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); DS4 0.6.5; reasoning=off",
+      "reason": "historical qualification generation; visible for audit but never ranked against gx10-qualification-v5"
+    },
+    {
+      "run_id": "20260831T215915Z-qwen3.8-flash-next-9b17db7a-smoke",
+      "benchmark_date": "2026-08-31",
+      "status": "HISTORICAL_COHORT",
+      "qualification_outcome": "NOT_QUALIFIED",
+      "result_validity": "VALID",
+      "profile_decision": "DOES_NOT_MEET_PROFILE",
+      "profile": "smoke",
+      "profile_version": "gx10-qualification-v4",
+      "model_identity": "Qwen3.8-Flash-Next Flash-Next [RadixArk/Qwen3.8-Flash-Next-NVFP4] — 125B main + 51B PLE / 6B active (Qwen3.8-Flash-Next sparse MoE) — NVFP4 — 262144-token context — sha256:56d617b9008714d82b491a73c3fc8f86501a2a4dcd17f0b883359762f1af3e17",
+      "runtime_alias": "qwen3.8-flash-next",
+      "immutable_digest": "sha256:56d617b9008714d82b491a73c3fc8f86501a2a4dcd17f0b883359762f1af3e17",
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "native",
+      "overall_score": 95.833,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 50.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); vLLM; reasoning=native; mtp=2",
+      "reason": "historical qualification generation; visible for audit but never ranked against gx10-qualification-v5"
+    },
+    {
+      "run_id": "20260901T014009Z-qwen3.8-flash-next-9b17db7a-smoke",
+      "benchmark_date": "2026-09-01",
+      "status": "INFRA_ERROR",
+      "qualification_outcome": "INFRA_ERROR",
+      "result_validity": "INFRA_FAILURE",
+      "profile_decision": "NOT_ASSESSED",
+      "profile": "smoke",
+      "profile_version": "gx10-qualification-v4",
+      "model_identity": "METADATA_INCOMPLETE — digest unavailable",
+      "runtime_alias": "qwen3.8-flash-next",
+      "immutable_digest": null,
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "native",
+      "overall_score": null,
+      "component_scores": {
+        "coding": null,
+        "hermes": null,
+        "tool_instruction": null,
+        "reliability": null,
+        "performance": null
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); vLLM; reasoning=native; mtp=2",
+      "reason": "infrastructure error; run is not marked COMPLETE; overall score is unavailable; missing compatibility metadata: scoring weights"
+    },
+    {
+      "run_id": "20260901T014251Z-qwen3.8-flash-next-9b17db7a-smoke",
+      "benchmark_date": "2026-09-01",
+      "status": "HISTORICAL_COHORT",
+      "qualification_outcome": "QUALIFIED",
+      "result_validity": "VALID",
+      "profile_decision": "MEETS_PROFILE",
+      "profile": "smoke",
+      "profile_version": "gx10-qualification-v4",
+      "model_identity": "Qwen3.8-Flash-Next Flash-Next [RadixArk/Qwen3.8-Flash-Next-NVFP4] — 125B main + 51B PLE / 6B active (Qwen3.8-Flash-Next sparse MoE) — NVFP4 — 262144-token context — sha256:56d617b9008714d82b491a73c3fc8f86501a2a4dcd17f0b883359762f1af3e17",
+      "runtime_alias": "qwen3.8-flash-next",
+      "immutable_digest": "sha256:56d617b9008714d82b491a73c3fc8f86501a2a4dcd17f0b883359762f1af3e17",
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "native",
+      "overall_score": 95.833,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 50.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); vLLM; reasoning=native; mtp=2",
+      "reason": "historical qualification generation; visible for audit but never ranked against gx10-qualification-v5"
+    },
+    {
+      "run_id": "20260901T020003Z-qwen3.8-flash-next-9b17db7a-standard",
+      "benchmark_date": "2026-09-01",
+      "status": "HISTORICAL_COHORT",
+      "qualification_outcome": "NOT_QUALIFIED",
+      "result_validity": "VALID",
+      "profile_decision": "DOES_NOT_MEET_PROFILE",
+      "profile": "standard",
+      "profile_version": "gx10-qualification-v4",
+      "model_identity": "Qwen3.8-Flash-Next Flash-Next [RadixArk/Qwen3.8-Flash-Next-NVFP4] — 125B main + 51B PLE / 6B active (Qwen3.8-Flash-Next sparse MoE) — NVFP4 — 262144-token context — sha256:56d617b9008714d82b491a73c3fc8f86501a2a4dcd17f0b883359762f1af3e17",
+      "runtime_alias": "qwen3.8-flash-next",
+      "immutable_digest": "sha256:56d617b9008714d82b491a73c3fc8f86501a2a4dcd17f0b883359762f1af3e17",
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "native",
+      "overall_score": 61.617,
+      "component_scores": {
+        "coding": 17.8,
+        "hermes": 100.0,
+        "tool_instruction": 92.222,
+        "reliability": 88.3,
+        "performance": 36.68
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); vLLM; reasoning=native; mtp=2",
+      "reason": "historical qualification generation; visible for audit but never ranked against gx10-qualification-v5"
+    },
+    {
+      "run_id": "20260901T155636Z-qwen3.8-flash-next-9b17db7a-smoke",
+      "benchmark_date": "2026-09-01",
+      "status": "SMOKE_ONLY",
+      "qualification_outcome": "QUALIFIED",
+      "result_validity": "VALID",
+      "profile_decision": "MEETS_PROFILE",
+      "profile": "smoke",
+      "profile_version": "gx10-qualification-v5",
+      "model_identity": "Qwen3.8-Flash-Next Flash-Next [RadixArk/Qwen3.8-Flash-Next-NVFP4] — 125B main + 51B PLE / 6B active (Qwen3.8-Flash-Next sparse MoE) — NVFP4 — 262144-token context — sha256:56d617b9008714d82b491a73c3fc8f86501a2a4dcd17f0b883359762f1af3e17",
+      "runtime_alias": "qwen3.8-flash-next",
+      "immutable_digest": "sha256:56d617b9008714d82b491a73c3fc8f86501a2a4dcd17f0b883359762f1af3e17",
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "off",
+      "overall_score": 100.0,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 100.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); vLLM; reasoning=off; mtp=off; kv=BF16/default",
       "reason": "smoke results are never ranked with standard qualification"
+    },
+    {
+      "run_id": "20260901T162913Z-qwen3.8-flash-next-9b17db7a-smoke",
+      "benchmark_date": "2026-09-01",
+      "status": "SMOKE_ONLY",
+      "qualification_outcome": "QUALIFIED",
+      "result_validity": "VALID",
+      "profile_decision": "MEETS_PROFILE",
+      "profile": "smoke",
+      "profile_version": "gx10-qualification-v5",
+      "model_identity": "Qwen3.8-Flash-Next Flash-Next [RadixArk/Qwen3.8-Flash-Next-NVFP4] — 125B main + 51B PLE / 6B active (Qwen3.8-Flash-Next sparse MoE) — NVFP4 — 262144-token context — sha256:56d617b9008714d82b491a73c3fc8f86501a2a4dcd17f0b883359762f1af3e17",
+      "runtime_alias": "qwen3.8-flash-next",
+      "immutable_digest": "sha256:56d617b9008714d82b491a73c3fc8f86501a2a4dcd17f0b883359762f1af3e17",
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "off",
+      "overall_score": 100.0,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 100.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); vLLM; reasoning=off; mtp=off; kv=BF16/default",
+      "reason": "smoke results are never ranked with standard qualification"
+    },
+    {
+      "run_id": "20260901T184158Z-qwen38-q8-262k-latest-3271673b-smoke",
+      "benchmark_date": "2026-09-01",
+      "status": "SMOKE_ONLY",
+      "qualification_outcome": "QUALIFIED",
+      "result_validity": "VALID",
+      "profile_decision": "MEETS_PROFILE",
+      "profile": "smoke",
+      "profile_version": "gx10-qualification-v5",
+      "model_identity": "Qwen3.8 0814 [qwen3.8:27b-q8_0] — 27.3B (qwen35) — Q8_0 — 262144-token context — sha256:4ab95509a27d7a3f23dcc612a660858e9f28c1a5322bd9240f34559bcf888988",
+      "runtime_alias": "qwen38-q8-262k:latest",
+      "immutable_digest": "sha256:4ab95509a27d7a3f23dcc612a660858e9f28c1a5322bd9240f34559bcf888988",
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "effort:medium",
+      "overall_score": 95.833,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 50.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.33.1",
+      "reason": "smoke results are never ranked with standard qualification"
+    },
+    {
+      "run_id": "20260902T002055Z-ornith15-q8-latest-330554b2-smoke",
+      "benchmark_date": "2026-09-02",
+      "status": "SMOKE_ONLY",
+      "qualification_outcome": "QUALIFIED",
+      "result_validity": "VALID",
+      "profile_decision": "MEETS_PROFILE",
+      "profile": "smoke",
+      "profile_version": "gx10-qualification-v5",
+      "model_identity": "Ornith-1.5 1.5 [ornith-ai/Ornith-1.5-35B-A3B] — 35.5B (qwen35moe) — Q8_0 — 262144-token context — sha256:c7c57f189918400a4b4193530cceec9136f95c019357de02abc61018f8bad485",
+      "runtime_alias": "ornith15-q8:latest",
+      "immutable_digest": "sha256:c7c57f189918400a4b4193530cceec9136f95c019357de02abc61018f8bad485",
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "off",
+      "overall_score": 100.0,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 100.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.33.1; reasoning=off",
+      "reason": "smoke results are never ranked with standard qualification"
+    },
+    {
+      "run_id": "20260902T010018Z-coder-uncens-latest-ba5d22c1-smoke",
+      "benchmark_date": "2026-09-02",
+      "status": "SMOKE_ONLY",
+      "qualification_outcome": "QUALIFIED",
+      "result_validity": "VALID",
+      "profile_decision": "MEETS_PROFILE",
+      "profile": "smoke",
+      "profile_version": "gx10-qualification-v5",
+      "model_identity": "Laguna-S-2.1-Uncensored APEX 2.1 [Laguna-S-2.1-Uncensored APEX] — 117.6B (laguna) — Q6_K — 131072-token context — sha256:50197a047af0f7c198929eb80bbd4bb5a44cd43ca878f5241c846ffbf3ee9a7b",
+      "runtime_alias": "coder-uncens:latest",
+      "immutable_digest": "sha256:50197a047af0f7c198929eb80bbd4bb5a44cd43ca878f5241c846ffbf3ee9a7b",
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "effort:high",
+      "overall_score": 95.833,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 50.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.33.1",
+      "reason": "smoke results are never ranked with standard qualification"
+    },
+    {
+      "run_id": "20260902T010243Z-coder-uncens-latest-ba5d22c1-standard",
+      "benchmark_date": "2026-09-02",
+      "status": "INFRA_ERROR",
+      "qualification_outcome": "INFRA_ERROR",
+      "result_validity": "INFRA_FAILURE",
+      "profile_decision": "NOT_ASSESSED",
+      "profile": "standard",
+      "profile_version": "gx10-qualification-v5",
+      "model_identity": "METADATA_INCOMPLETE — digest unavailable",
+      "runtime_alias": "coder-uncens:latest",
+      "immutable_digest": null,
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "effort:high",
+      "overall_score": null,
+      "component_scores": {
+        "coding": null,
+        "hermes": null,
+        "tool_instruction": null,
+        "reliability": null,
+        "performance": null
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.33.1",
+      "reason": "infrastructure error; run is not marked COMPLETE; overall score is unavailable; missing compatibility metadata: scoring weights"
+    },
+    {
+      "run_id": "20260902T034130Z-coder-uncens-256k-latest-ed8dc6ee-smoke",
+      "benchmark_date": "2026-09-02",
+      "status": "SMOKE_ONLY",
+      "qualification_outcome": "QUALIFIED",
+      "result_validity": "VALID",
+      "profile_decision": "MEETS_PROFILE",
+      "profile": "smoke",
+      "profile_version": "gx10-qualification-v5",
+      "model_identity": "Laguna-S-2.1-Uncensored APEX 2.1 [Laguna-S-2.1-Uncensored APEX] — 117.6B (laguna) — Q6_K — 262144-token context — sha256:ea34631ee5c00f9acd0182cb9503098e96c551e3841bf537bbc69a4576aea84b",
+      "runtime_alias": "coder-uncens-256k:latest",
+      "immutable_digest": "sha256:ea34631ee5c00f9acd0182cb9503098e96c551e3841bf537bbc69a4576aea84b",
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "effort:high",
+      "overall_score": 95.833,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 50.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.33.1",
+      "reason": "smoke results are never ranked with standard qualification"
+    },
+    {
+      "run_id": "20260902T034318Z-coder-uncens-256k-latest-ed8dc6ee-standard",
+      "benchmark_date": "2026-09-02",
+      "status": "INFRA_ERROR",
+      "qualification_outcome": "INFRA_ERROR",
+      "result_validity": "INFRA_FAILURE",
+      "profile_decision": "NOT_ASSESSED",
+      "profile": "standard",
+      "profile_version": "gx10-qualification-v5",
+      "model_identity": "METADATA_INCOMPLETE — digest unavailable",
+      "runtime_alias": "coder-uncens-256k:latest",
+      "immutable_digest": null,
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "effort:high",
+      "overall_score": null,
+      "component_scores": {
+        "coding": null,
+        "hermes": null,
+        "tool_instruction": null,
+        "reliability": null,
+        "performance": null
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.33.1",
+      "reason": "infrastructure error; run is not marked COMPLETE; overall score is unavailable; missing compatibility metadata: scoring weights"
+    },
+    {
+      "run_id": "20260902T043058Z-agent-main-latest-0960376c-smoke",
+      "benchmark_date": "2026-09-02",
+      "status": "SMOKE_ONLY",
+      "qualification_outcome": "NOT_QUALIFIED",
+      "result_validity": "VALID",
+      "profile_decision": "DOES_NOT_MEET_PROFILE",
+      "profile": "smoke",
+      "profile_version": "gx10-qualification-v5",
+      "model_identity": "Qwen3.6-35B-A3B 3.6 [Qwen3.6-35B-A3B] — 36.0B (qwen35moe) — Q8_0 — 65536-token context — sha256:0218f872e86baa9c7610509f27db36a7bc52eea7afee24688f81ca74ffcb6c77",
+      "runtime_alias": "agent-main:latest",
+      "immutable_digest": "sha256:0218f872e86baa9c7610509f27db36a7bc52eea7afee24688f81ca74ffcb6c77",
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "effort:medium",
+      "overall_score": 95.833,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 50.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); Ollama 0.33.1",
+      "reason": "smoke results are never ranked with standard qualification"
+    },
+    {
+      "run_id": "20260902T043355Z-deepseek-v4-flash-f61ff5cf-smoke",
+      "benchmark_date": "2026-09-02",
+      "status": "SMOKE_ONLY",
+      "qualification_outcome": "QUALIFIED",
+      "result_validity": "VALID",
+      "profile_decision": "MEETS_PROFILE",
+      "profile": "smoke",
+      "profile_version": "gx10-qualification-v5",
+      "model_identity": "DeepSeek V4 Flash V4-Flash [DeepSeek-V4-Flash] — DeepSeek-V4-Flash (deepseek) — DS4-GGUF — 524288-token context — sha256:ca22ae2f838e14077c22bc1c1417b71b45b5e5a3687bd96c2ac6e17fdb6261c0",
+      "runtime_alias": "deepseek-v4-flash",
+      "immutable_digest": "sha256:ca22ae2f838e14077c22bc1c1417b71b45b5e5a3687bd96c2ac6e17fdb6261c0",
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "off",
+      "overall_score": 100.0,
+      "component_scores": {
+        "coding": null,
+        "hermes": 100.0,
+        "tool_instruction": 100.0,
+        "reliability": 100.0,
+        "performance": 100.0
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); DS4 0.6.5; reasoning=off",
+      "reason": "smoke results are never ranked with standard qualification"
+    },
+    {
+      "run_id": "20260902T043509Z-deepseek-v4-flash-f61ff5cf-standard",
+      "benchmark_date": "2026-09-02",
+      "status": "INFRA_ERROR",
+      "qualification_outcome": "INFRA_ERROR",
+      "result_validity": "INFRA_FAILURE",
+      "profile_decision": "NOT_ASSESSED",
+      "profile": "standard",
+      "profile_version": "gx10-qualification-v5",
+      "model_identity": "METADATA_INCOMPLETE — digest unavailable",
+      "runtime_alias": "deepseek-v4-flash",
+      "immutable_digest": null,
+      "benchmark_track": "primary-deployment",
+      "reasoning_policy_selection_mode": "configured",
+      "reasoning_policy": "off",
+      "overall_score": null,
+      "component_scores": {
+        "coding": null,
+        "hermes": null,
+        "tool_instruction": null,
+        "reliability": null,
+        "performance": null
+      },
+      "hardware_runtime": "NVIDIA GB10/GX10 model server; split Linux controller/model server (x86_64 controller); DS4 0.6.5; reasoning=off",
+      "reason": "infrastructure error; run is not marked COMPLETE; overall score is unavailable; missing compatibility metadata: scoring weights"
     }
   ]
 }

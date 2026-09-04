@@ -127,6 +127,54 @@
       },
       "additionalProperties": false
     },
+    "infermarkContextC1": {
+      "type": "object",
+      "required": [
+        "generation_tokens_per_second",
+        "estimated_visible_generation_chunks_per_second",
+        "mean_time_to_first_visible_chunk_seconds",
+        "end_to_end_visible_output_chunks_per_second"
+      ],
+      "properties": {
+        "generation_tokens_per_second": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "generation_tokens_per_second_source": {
+          "type": ["string", "null"]
+        },
+        "prefill_tokens_per_second": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "mean_time_to_first_token_seconds": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "estimated_visible_generation_chunks_per_second": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "mean_time_to_first_visible_chunk_seconds": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "end_to_end_visible_output_chunks_per_second": {
+          "type": ["number", "null"],
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "infermarkC1": {
+      "type": "object",
+      "required": ["short", "medium"],
+      "properties": {
+        "short": {"$ref": "#/$defs/infermarkContextC1"},
+        "medium": {"$ref": "#/$defs/infermarkContextC1"}
+      },
+      "additionalProperties": false
+    },
     "scoredRow": {
       "type": "object",
       "required": [
@@ -149,6 +197,7 @@
         "profile_decision",
         "overall_score",
         "component_scores",
+        "infermark_c1",
         "duration_seconds",
         "hardware_runtime",
         "upstream_pin_set"
@@ -179,6 +228,7 @@
         },
         "overall_score": {"$ref": "#/$defs/nullableScore"},
         "component_scores": {"$ref": "#/$defs/componentScores"},
+        "infermark_c1": {"$ref": "#/$defs/infermarkC1"},
         "duration_seconds": {"type": ["number", "null"], "minimum": 0},
         "hardware_runtime": {"type": "string", "minLength": 1},
         "upstream_pin_set": {"type": "string", "pattern": "^pins-[0-9a-f]{12}$"}
@@ -202,13 +252,16 @@
         "benchmark_track",
         "reasoning_policy_selection_mode",
         "reasoning_policy",
+        "overall_score",
+        "component_scores",
+        "hardware_runtime",
         "reason"
       ],
       "properties": {
         "run_id": {"type": "string", "minLength": 1},
         "benchmark_date": {"type": ["string", "null"]},
         "status": {
-          "enum": ["METADATA_INCOMPLETE", "INFRA_ERROR", "INCOMPLETE", "INVALID", "SMOKE_ONLY", "INCOMPATIBLE", "UNRANKED", "QUARANTINED", "LEGACY_THINKING_CONTROL_MISMATCH"]
+          "enum": ["METADATA_INCOMPLETE", "INFRA_ERROR", "INCOMPLETE", "INVALID", "SMOKE_ONLY", "INCOMPATIBLE", "HISTORICAL_COHORT", "UNRANKED", "QUARANTINED", "LEGACY_THINKING_CONTROL_MISMATCH"]
         },
         "qualification_outcome": {"type": ["string", "null"]},
         "result_validity": {
@@ -234,6 +287,9 @@
           "type": ["string", "null"],
           "minLength": 1
         },
+        "overall_score": {"$ref": "#/$defs/nullableScore"},
+        "component_scores": {"$ref": "#/$defs/componentScores"},
+        "hardware_runtime": {"type": "string", "minLength": 1},
         "reason": {"type": "string", "minLength": 1}
       },
       "additionalProperties": false

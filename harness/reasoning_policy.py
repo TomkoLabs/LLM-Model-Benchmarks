@@ -7,6 +7,8 @@ from typing import Any, Mapping
 
 REASONING_POLICY_CONTRACT = "ollama-reasoning-policy-v1"
 OPENAI_REASONING_POLICY_CONTRACT = "openai-reasoning-policy-v1"
+VLLM_REASONING_POLICY_CONTRACT = "vllm-chat-template-reasoning-policy-v1"
+QWEN_ENABLE_THINKING_PROFILE = "qwen-enable-thinking-v1"
 PRIMARY_DEPLOYMENT_TRACK = "primary-deployment"
 CONTROLLED_POLICY_TRACK = "controlled-policy"
 CONFIGURED_POLICY_RULE = "configured-per-model"
@@ -149,6 +151,8 @@ def reasoning_policy_contract(runtime: str) -> str:
         return REASONING_POLICY_CONTRACT
     if runtime == "ds4":
         return OPENAI_REASONING_POLICY_CONTRACT
+    if runtime == "vllm":
+        return VLLM_REASONING_POLICY_CONTRACT
     raise ReasoningPolicyError(f"unsupported model runtime: {runtime}")
 
 
@@ -156,6 +160,7 @@ def runtime_reasoning_control(
     runtime: str,
     api_mode: str,
     policy: ReasoningPolicy,
+    reasoning_control_profile: str | None = None,
 ) -> dict[str, Any]:
     """Return the exact supported control for one runtime/API boundary."""
 
@@ -172,6 +177,22 @@ def runtime_reasoning_control(
             return {"reasoning_effort": policy.effort}
         if policy.mode == "native":
             return {}
+    if runtime == "vllm":
+        if api_mode != "openai-chat-completions":
+            raise ReasoningPolicyError(
+                "vLLM supports only the OpenAI chat-completions API mode"
+            )
+        if reasoning_control_profile != QWEN_ENABLE_THINKING_PROFILE:
+            raise ReasoningPolicyError(
+                "vLLM requires a supported reasoning_control_profile"
+            )
+        if policy.mode == "off":
+            return {"chat_template_kwargs": {"enable_thinking": False}}
+        if policy.mode == "native":
+            return {}
+        raise ReasoningPolicyError(
+            "the configured vLLM reasoning profile supports only off and native"
+        )
     raise ReasoningPolicyError(f"unsupported model runtime: {runtime}")
 
 
@@ -192,15 +213,100 @@ def _remove_nested_controls(
         payload.pop(key, None)
 
 
+def _request_reasoning_signals(payload: Mapping[str, Any]) -> list[tuple[str, Any]]:
+    signals: list[tuple[str, Any]] = []
+    fields = ("enable_thinking", "reasoning_effort", "think")
+    for field in fields:
+        if field in payload:
+            signals.append((field, payload[field]))
+    for container in ("chat_template_kwargs", "options"):
+        value = payload.get(container)
+        if not isinstance(value, Mapping):
+            continue
+        for field in fields:
+            if field in value:
+                signals.append((f"{container}.{field}", value[field]))
+    return signals
+
+
+def _qwen_request_signal_policy(field: str, value: Any) -> ReasoningPolicy:
+    name = field.rsplit(".", 1)[-1]
+    if name in {"enable_thinking", "think"}:
+        if type(value) is bool:
+            return parse_reasoning_policy("native" if value else "off")
+        raise ReasoningPolicyError(
+            f"vLLM request control {field} must be a boolean"
+        )
+    if name == "reasoning_effort":
+        if value is False or (
+            isinstance(value, str)
+            and value.strip().lower() in {"none", "off", "false", "0"}
+        ):
+            return parse_reasoning_policy("off")
+        if value is True or (
+            isinstance(value, str)
+            and value.strip().lower() in {"native", "on", "true", "1"}
+        ):
+            return parse_reasoning_policy("native")
+        raise ReasoningPolicyError(
+            f"vLLM request control {field} requests an unsupported effort"
+        )
+    raise ReasoningPolicyError(f"unsupported vLLM request control: {field}")
+
+
+def _effective_request_policy(
+    runtime: str,
+    payload: Mapping[str, Any],
+    deployment_policy: ReasoningPolicy,
+    reasoning_control_profile: str | None,
+    honor_request_reasoning_controls: bool = False,
+) -> tuple[ReasoningPolicy, str, list[str]]:
+    if (
+        runtime != "vllm"
+        or reasoning_control_profile != QWEN_ENABLE_THINKING_PROFILE
+    ):
+        return deployment_policy, "deployment-policy", []
+    if deployment_policy.mode == "off" and not honor_request_reasoning_controls:
+        return deployment_policy, "deployment-policy", []
+    if deployment_policy.mode not in {"native", "off"}:
+        return deployment_policy, "deployment-policy", []
+
+    signals = _request_reasoning_signals(payload)
+    if not signals:
+        return deployment_policy, "deployment-policy", []
+    policies = {
+        _qwen_request_signal_policy(field, value).value
+        for field, value in signals
+    }
+    if len(policies) != 1:
+        raise ReasoningPolicyError(
+            "vLLM request contains conflicting reasoning controls"
+        )
+    return (
+        parse_reasoning_policy(next(iter(policies))),
+        "request-control",
+        sorted(field for field, _value in signals),
+    )
+
+
 def normalize_model_request(
     runtime: str,
     api_mode: str,
     payload: Mapping[str, Any],
     policy: ReasoningPolicy,
+    reasoning_control_profile: str | None = None,
+    honor_request_reasoning_controls: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     if not isinstance(payload, Mapping):
         raise ReasoningPolicyError("target inference request body must be a JSON object")
     normalized = dict(payload)
+    effective_policy, policy_source, signal_fields = _effective_request_policy(
+        runtime,
+        payload,
+        policy,
+        reasoning_control_profile,
+        honor_request_reasoning_controls,
+    )
     removed: list[str] = []
     for field in ("enable_thinking", "reasoning", "reasoning_effort", "think"):
         if field in normalized:
@@ -218,14 +324,28 @@ def normalize_model_request(
         ("enable_thinking", "reasoning", "reasoning_effort", "think"),
         removed,
     )
-    control = runtime_reasoning_control(runtime, api_mode, policy)
-    normalized.update(control)
+    control = runtime_reasoning_control(
+        runtime,
+        api_mode,
+        effective_policy,
+        reasoning_control_profile,
+    )
+    for key, value in control.items():
+        if isinstance(value, Mapping) and isinstance(normalized.get(key), Mapping):
+            normalized[key] = {**normalized[key], **value}
+        else:
+            normalized[key] = value
     field = next(iter(control), None)
     return normalized, {
         "contract": reasoning_policy_contract(runtime),
         "runtime": runtime,
-        "requested_reasoning_policy": policy.value,
-        "reasoning_cohort": policy.cohort,
+        "reasoning_control_profile": reasoning_control_profile,
+        "deployment_reasoning_policy": policy.value,
+        "requested_reasoning_policy": effective_policy.value,
+        "request_reasoning_policy_source": policy_source,
+        "request_reasoning_signal_fields": signal_fields,
+        "honor_request_reasoning_controls": honor_request_reasoning_controls,
+        "reasoning_cohort": effective_policy.cohort,
         "api_mode": api_mode,
         "serialized_control_field": field,
         "serialized_control_value": control.get(field) if field else None,

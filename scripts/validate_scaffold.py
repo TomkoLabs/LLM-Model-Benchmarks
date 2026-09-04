@@ -25,6 +25,9 @@ REQUIRED = [
     "configs/qualification-v2.yaml",
     "configs/qualification-v3.yaml",
     "configs/qualification-v4.yaml",
+    "configs/qualification-v5.yaml",
+    "upstreams.lock.json",
+    "upstreams-v5.lock.json",
     "scripts/bootstrap",
     "schemas/task.schema.json",
     "schemas/result.schema.json",
@@ -55,6 +58,8 @@ required_models = {
     "laguna-apex-128k",
     "qwen38-q8-medium-262k",
     "qwen38-q8-medium-128k",
+    "qwen38-flash-next-nvfp4-262k",
+    "qwen38-flash-next-nvfp4-262k-quality",
 }
 
 actual_models = set((models or {}).get("models", {}))
@@ -81,13 +86,20 @@ if bench.get("schema_version") != 2:
 if bench.get("benchmark_generation") != "hermesbench-v3":
     errors.append("active benchmark generation is not hermesbench-v3")
 
-with (ROOT / "configs/qualification-v4.yaml").open(
+with (ROOT / "configs/qualification-v5.yaml").open(
     "r", encoding="utf-8"
 ) as f:
     qualification = yaml.safe_load(f)
 
-if qualification.get("generation") != "gx10-qualification-v4":
-    errors.append("active qualification generation is not gx10-qualification-v4")
+if qualification.get("generation") != "gx10-qualification-v5":
+    errors.append("active qualification generation is not gx10-qualification-v5")
+
+with (ROOT / "configs/qualification-v4.yaml").open(
+    "r", encoding="utf-8"
+) as f:
+    historical_qualification = yaml.safe_load(f)
+if historical_qualification.get("generation") != "gx10-qualification-v4":
+    errors.append("historical qualification generation v4 is not preserved")
 
 schemas = {}
 for schema in sorted((ROOT / "schemas").glob("*.schema.json")):

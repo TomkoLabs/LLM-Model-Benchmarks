@@ -11,6 +11,7 @@ import jsonschema
 import yaml
 
 from harness.artifacts import atomic_write_text, ensure_root
+from harness.infermark_metrics import performance_summary
 from harness.model_identity import (
     REGISTRY_PATH,
     ModelMetadataError,
@@ -31,8 +32,8 @@ DEFAULT_OUTPUT_ROOT = ROOT / "generated-results"
 DEFAULT_PUBLIC_OUTPUT_ROOT = ROOT / "public-results"
 RESULT_SCHEMA = ROOT / "schemas" / "qualification-run.schema.json"
 PUBLIC_SCHEMA = ROOT / "schemas" / "public-leaderboard.schema.json"
-QUALIFICATION_CONFIG = ROOT / "configs" / "qualification-v4.yaml"
-UPSTREAM_LOCK = ROOT / "upstreams.lock.json"
+QUALIFICATION_CONFIG = ROOT / "configs" / "qualification-v5.yaml"
+UPSTREAM_LOCK = ROOT / "upstreams-v5.lock.json"
 MAX_RESULT_BYTES = 20 * 1024 * 1024
 METADATA_CANDIDATES_FILENAME = "model-metadata-candidates.json"
 PROJECT_NAME = "LLM Model Benchmarks"
@@ -84,6 +85,53 @@ def _number(value: Any) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     return round(float(value), 3)
+
+
+def _empty_infermark_performance() -> dict[str, dict[str, Any]]:
+    return {
+        context: performance_summary({})
+        for context in ("short", "medium")
+    }
+
+
+def _infermark_performance(
+    run_components: Mapping[str, Any],
+) -> dict[str, dict[str, Any]]:
+    upstreams = run_components.get("upstreams")
+    upstreams = upstreams if isinstance(upstreams, Mapping) else {}
+    infermark = upstreams.get("infermark")
+    infermark = infermark if isinstance(infermark, Mapping) else {}
+    metrics = infermark.get("metrics")
+    metrics = metrics if isinstance(metrics, Mapping) else {}
+    contexts = metrics.get("contexts")
+    contexts = contexts if isinstance(contexts, Mapping) else {}
+    summaries: dict[str, dict[str, Any]] = {}
+    for context_name in ("short", "medium"):
+        context = contexts.get(context_name)
+        if not isinstance(context, Mapping):
+            context = metrics if context_name == "short" else {}
+        summaries[context_name] = performance_summary(context)
+    spark = upstreams.get("spark-bench")
+    spark = spark if isinstance(spark, Mapping) else {}
+    spark_metrics = spark.get("metrics")
+    spark_metrics = spark_metrics if isinstance(spark_metrics, Mapping) else {}
+    serving = spark_metrics.get("serving_performance")
+    serving = serving if isinstance(serving, Mapping) else {}
+    representative = serving.get("representative_single_stream")
+    if isinstance(representative, Mapping):
+        actual = _number(representative.get("generation_tokens_per_second"))
+        if actual is not None and actual > 0:
+            summaries["short"]["generation_tokens_per_second"] = actual
+            summaries["short"]["generation_tokens_per_second_source"] = (
+                "sparkbench-v6.8-tier2-single-stream"
+            )
+            summaries["short"]["prefill_tokens_per_second"] = _number(
+                representative.get("prefill_tokens_per_second")
+            )
+            summaries["short"]["mean_time_to_first_token_seconds"] = _number(
+                representative.get("time_to_first_token_seconds")
+            )
+    return summaries
 
 
 def _text(value: Any) -> str | None:
@@ -242,6 +290,8 @@ def _public_hardware_runtime(result: Mapping[str, Any]) -> str:
         if runtime == "ollama"
         else "DS4"
         if runtime == "ds4"
+        else "vLLM"
+        if runtime == "vllm"
         else "local runtime"
     )
     version = _text(preflight.get("runtime_version"))
@@ -256,6 +306,14 @@ def _public_hardware_runtime(result: Mapping[str, Any]) -> str:
     )
     if reasoning and re.fullmatch(r"[A-Za-z0-9_+.-]+", reasoning):
         runtime_name += f"; reasoning={reasoning}"
+    serving_configuration = configured.get("serving_configuration")
+    if runtime == "vllm" and isinstance(serving_configuration, Mapping):
+        mtp = serving_configuration.get("mtp_speculative_tokens")
+        if type(mtp) is int and mtp >= 0:
+            runtime_name += f"; mtp={'off' if mtp == 0 else mtp}"
+        kv = _text(serving_configuration.get("kv_cache_dtype"))
+        if kv and re.fullmatch(r"[A-Za-z0-9_+./-]+", kv):
+            runtime_name += f"; kv={kv}"
     return f"{hardware}; {layout}; {runtime_name}"
 
 
@@ -318,7 +376,7 @@ def _compatibility(
     if model_policy and provenance_policy and model_policy != provenance_policy:
         policy_issues.append("resolved reasoning policy mismatch")
 
-    if generation == "gx10-qualification-v4":
+    if generation in {"gx10-qualification-v4", "gx10-qualification-v5"}:
         requested = _text(policy_provenance.get("requested"))
         recorded_selection = _text(policy_provenance.get("selection_mode"))
         model_selection = _text(model.get("reasoning_policy_selection_mode"))
@@ -484,6 +542,7 @@ def _base_row(run_dir: Path, outcome: str, reason: str) -> dict[str, Any]:
         "profile_decision": "NOT_ASSESSED",
         "overall_score": None,
         "component_scores": {name: None for name in SCORE_NAMES},
+        "infermark_c1": _empty_infermark_performance(),
         "duration_seconds": None,
         "infrastructure_error": None,
         "public_hardware_runtime": "deployment metadata unavailable",
@@ -632,6 +691,7 @@ def _result_row(
         "component_scores": {
             name: _number(score_components.get(name)) for name in SCORE_NAMES
         },
+        "infermark_c1": _infermark_performance(run_components),
         "duration_seconds": _number(provenance.get("elapsed_seconds")),
         "infrastructure_error": infrastructure_error,
         "public_hardware_runtime": _public_hardware_runtime(result),
@@ -928,6 +988,9 @@ def _public_scored_row(
         "component_scores": {
             name: components.get(name) for name in SCORE_NAMES
         },
+        "infermark_c1": row.get("infermark_c1")
+        if isinstance(row.get("infermark_c1"), Mapping)
+        else _empty_infermark_performance(),
         "duration_seconds": row.get("duration_seconds"),
         "hardware_runtime": row.get("public_hardware_runtime"),
         "upstream_pin_set": row.get("upstream_pin_set"),
@@ -972,6 +1035,15 @@ def _diagnostic_status(
             "LEGACY_THINKING_CONTROL_MISMATCH",
             "historical v2 claimed thinking-off without uniformly serializing Ollama's supported control; rerun under v4",
         )
+    if (
+        row.get("qualification_generation")
+        in {"gx10-qualification-v3", "gx10-qualification-v4"}
+        and current_generation == "gx10-qualification-v5"
+    ):
+        return (
+            "HISTORICAL_COHORT",
+            "historical qualification generation; visible for audit but never ranked against gx10-qualification-v5",
+        )
     if profile == "smoke":
         return (
             "SMOKE_ONLY",
@@ -1000,6 +1072,10 @@ def _public_diagnostic_row(
         row, current_group_id, current_generation
     )
     timestamp = _text(row.get("run_timestamp"))
+    component_scores = row.get("component_scores")
+    component_scores = (
+        component_scores if isinstance(component_scores, Mapping) else {}
+    )
     return {
         "run_id": _safe_run_id(row["run_id"]),
         "benchmark_date": timestamp[:10] if timestamp else None,
@@ -1017,6 +1093,11 @@ def _public_diagnostic_row(
             "reasoning_policy_selection_mode"
         ),
         "reasoning_policy": row.get("reasoning_policy"),
+        "overall_score": row.get("overall_score"),
+        "component_scores": {
+            name: component_scores.get(name) for name in SCORE_NAMES
+        },
+        "hardware_runtime": row.get("public_hardware_runtime"),
         "reason": reason,
     }
 
@@ -1123,14 +1204,56 @@ def _display(value: Any) -> str:
     return str(value).replace("|", "\\|").replace("\n", " ")
 
 
+def _metric_context(value: Any, context: str) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        return {}
+    context_value = value.get(context)
+    return context_value if isinstance(context_value, Mapping) else {}
+
+
+def _display_generation_speed(value: Any) -> str | None:
+    contexts = [_metric_context(value, name) for name in ("short", "medium")]
+    actual = [_number(row.get("generation_tokens_per_second")) for row in contexts]
+    estimated = [
+        _number(row.get("estimated_visible_generation_chunks_per_second"))
+        for row in contexts
+    ]
+    if all(number is not None for number in actual):
+        return f"{actual[0]:.1f} / {actual[1]:.1f} tok/s"
+    if all(number is not None for number in estimated):
+        return f"{estimated[0]:.1f} / {estimated[1]:.1f} est. chunks/s"
+    displayed: list[str] = []
+    for token_rate, chunk_rate in zip(actual, estimated):
+        if token_rate is not None:
+            displayed.append(f"{token_rate:.1f} tok/s")
+        elif chunk_rate is not None:
+            displayed.append(f"{chunk_rate:.1f} est. chunks/s")
+        else:
+            displayed.append("—")
+    return " / ".join(displayed) if any(value != "—" for value in displayed) else None
+
+
+def _display_infermark_pair(value: Any, key: str) -> str | None:
+    numbers = [
+        _number(_metric_context(value, context).get(key))
+        for context in ("short", "medium")
+    ]
+    if all(number is None for number in numbers):
+        return None
+    return " / ".join(
+        "—" if number is None else f"{number:.3f}"
+        for number in numbers
+    )
+
+
 def render_markdown(summary: Mapping[str, Any]) -> str:
     lines = [
         "# Local benchmark comparison",
         "",
         "Rows are chronological and are not a global ranking. Compare numeric scores only within the same compatibility group.",
         "",
-        "| Timestamp | Run ID | Canonical model identity | Runtime alias | Digest | Profile | Version | Track | Policy selection | Effective policy | Decision | Validity | Technical outcome | Overall | Coding | Hermes | Tool/instruction | Reliability | Performance | Duration (s) | Infra error | Compatibility |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|---|",
+        "| Timestamp | Run ID | Canonical model identity | Runtime alias | Digest | Profile | Version | Track | Policy selection | Effective policy | Decision | Validity | Technical outcome | Overall | Coding | Hermes | Tool/instruction | Reliability | Performance | Generation speed (short / medium) | Mean TTFT-to-visible s (short / medium) | E2E visible chunk/s (short / medium) | Duration (s) | Infra error | Compatibility |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
     ]
     for row in summary["runs"]:
         components = row["component_scores"]
@@ -1160,13 +1283,22 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
             components["tool_instruction"],
             components["reliability"],
             components["performance"],
+            _display_generation_speed(row.get("infermark_c1")),
+            _display_infermark_pair(
+                row.get("infermark_c1"),
+                "mean_time_to_first_visible_chunk_seconds",
+            ),
+            _display_infermark_pair(
+                row.get("infermark_c1"),
+                "end_to_end_visible_output_chunks_per_second",
+            ),
             row["duration_seconds"],
             row["infrastructure_error"],
             compatibility,
         )
         lines.append("| " + " | ".join(_display(value) for value in values) + " |")
     if not summary["runs"]:
-        lines.append("| — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | no runs found |")
+        lines.append("| — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | no runs found |")
     lines.extend(["", "## Compatibility groups", ""])
     if summary["compatibility_groups"]:
         for group in summary["compatibility_groups"]:
@@ -1188,6 +1320,8 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
         lines.append("- No comparable completed runs were found.")
     lines.extend(
         [
+            "",
+            "*Generation speed uses actual output token/s only when a source provides tokenizer or usage counts. Pinned streaming Infermark does not; those rows show `est. chunks/s`, calculated as `1 / mean ITL` for non-empty visible `delta.content` events. Mean TTFC is time to the first such visible chunk. E2E visible chunk/s is Infermark's legacy `tokens_per_second`: successful visible chunks divided by the concurrency-level wall duration.*",
             "",
             "`INFRA_ERROR`, incomplete, and invalid rows are retained for auditability but excluded from model-quality comparison.",
             "",
@@ -1228,8 +1362,8 @@ def render_terminal(summary: Mapping[str, Any]) -> str:
 
 def _public_table(rows: Sequence[Mapping[str, Any]], *, ranked: bool) -> list[str]:
     lines = [
-        "| Rank | Canonical model identity | Version | Parameters / architecture | Quantization | Context | Runtime alias | Digest | Date | Profile / version | Track | Policy selection | Effective policy | Decision | Technical outcome | Overall | Coding | Hermes | Tool / instruction | Reliability | Performance | Duration (s) | Hardware / runtime | Pin set | Run ID | Source |",
-        "|---:|---|---|---|---|---:|---|---|---|---|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|---|---|---|",
+        "| Rank | Canonical model identity | Version | Parameters / architecture | Quantization | Context | Runtime alias | Digest | Date | Profile / version | Track | Policy selection | Effective policy | Decision | Technical outcome | Overall | Coding | Hermes | Tool / instruction | Reliability | Performance | Generation speed (short / medium) | Mean TTFT-to-visible s (short / medium) | E2E visible chunk/s (short / medium) | Duration (s) | Hardware / runtime | Pin set | Run ID | Source |",
+        "|---:|---|---|---|---|---:|---|---|---|---|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---|",
     ]
     for row in rows:
         identity = row["model_identity"]
@@ -1263,6 +1397,15 @@ def _public_table(rows: Sequence[Mapping[str, Any]], *, ranked: bool) -> list[st
             components["tool_instruction"],
             components["reliability"],
             components["performance"],
+            _display_generation_speed(row.get("infermark_c1")),
+            _display_infermark_pair(
+                row.get("infermark_c1"),
+                "mean_time_to_first_visible_chunk_seconds",
+            ),
+            _display_infermark_pair(
+                row.get("infermark_c1"),
+                "end_to_end_visible_output_chunks_per_second",
+            ),
             row["duration_seconds"],
             row["hardware_runtime"],
             row["upstream_pin_set"],
@@ -1271,7 +1414,7 @@ def _public_table(rows: Sequence[Mapping[str, Any]], *, ranked: bool) -> list[st
         )
         lines.append("| " + " | ".join(_display(value) for value in values) + " |")
     if not rows:
-        lines.append("| — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |")
+        lines.append("| — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |")
     return lines
 
 
@@ -1313,12 +1456,14 @@ def render_public_markdown(leaderboard: Mapping[str, Any]) -> str:
     lines.extend(
         [
             "",
+            "*Generation speed uses actual output token/s only when a source provides tokenizer or usage counts. Pinned streaming Infermark does not; those rows show `est. chunks/s`, calculated as `1 / mean ITL` for non-empty visible `delta.content` events. Mean TTFC is time to the first such visible chunk. E2E visible chunk/s is Infermark's legacy `tokens_per_second`: successful visible chunks divided by the concurrency-level wall duration.*",
+            "",
             "## No valid result / quarantined diagnostics",
             "",
             "Quarantined, infrastructure-error, incomplete, invalid, smoke-only, metadata-incomplete, legacy thinking-control, and incompatible results are diagnostic evidence, not ranked model outcomes.",
             "",
-            "| Status | Decision | Validity | Technical outcome | Canonical model identity | Runtime alias | Digest | Date | Profile / version | Track | Policy selection | Effective policy | Reason | Run ID |",
-            "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+            "| Status | Decision | Validity | Technical outcome | Overall | Coding | Canonical model identity | Runtime alias | Digest | Date | Profile / version | Track | Policy selection | Effective policy | Deployment | Reason | Run ID |",
+            "|---|---|---|---|---:|---:|---|---|---|---|---|---|---|---|---|---|---|",
         ]
     )
     for row in leaderboard["diagnostics"]:
@@ -1327,6 +1472,8 @@ def render_public_markdown(leaderboard: Mapping[str, Any]) -> str:
             row["profile_decision"],
             row["result_validity"],
             row["qualification_outcome"],
+            row["overall_score"],
+            row["component_scores"].get("coding"),
             row["model_identity"],
             row["runtime_alias"],
             row["immutable_digest"],
@@ -1335,12 +1482,13 @@ def render_public_markdown(leaderboard: Mapping[str, Any]) -> str:
             row["benchmark_track"],
             row["reasoning_policy_selection_mode"],
             row["reasoning_policy"],
+            row["hardware_runtime"],
             row["reason"],
             row["run_id"],
         )
         lines.append("| " + " | ".join(_display(value) for value in values) + " |")
     if not leaderboard["diagnostics"]:
-        lines.append("| — | — | — | — | — | — | — | — | — | — | — | — | — | — |")
+        lines.append("| — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |")
     lines.extend(
         [
             "",

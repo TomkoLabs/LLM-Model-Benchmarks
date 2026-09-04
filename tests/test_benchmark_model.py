@@ -472,6 +472,31 @@ class ArtifactSafetyTests(unittest.TestCase):
 
 
 class SandboxTests(unittest.TestCase):
+    def test_suite_maps_native_policy_to_no_hermes_effort(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            plan = make_plan(root, ("task-a",))
+            plan["model"]["reasoning_policy"] = "native"
+            plan["model"]["reasoning_effort"] = "native"
+            observed: dict[str, object] = {}
+
+            def runner(**kwargs: object) -> dict:
+                observed.update(kwargs)
+                return make_result(plan, "task-a", "PASS", 100.0)
+
+            benchmark_model.execute_suite(
+                plan,
+                preflight=fake_preflight,
+                task_runner=runner,
+                results_dir=root / "results",
+                reports_dir=root / "reports",
+                runtime_root=root / "runtime",
+                progress=lambda _message: None,
+            )
+
+        self.assertIsNone(observed["reasoning"])
+        self.assertEqual(observed["reasoning_policy"], "native")
+
     def test_command_uses_minimal_networkless_filesystem_and_fixed_env(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -1519,7 +1544,7 @@ class ScoringAndEvidenceTests(unittest.TestCase):
         self.assertEqual(ds4["runtime"], "ds4")
         plan["model_alias"] = "deepseek-v4-flash"
         plan["model"] = ds4
-        plan["endpoint"] = "http://10.23.45.67:8000/v1"
+        plan["endpoint"] = "http://10.0.0.2:8000/v1"
         result = make_result(plan, "harness-smoke-v1", "PASS", 100.0)
         result["model"]["runtime_identity_status"] = (
             "VERIFIED_MODEL_ID_AND_CONFIGURED_ARTIFACTS"
@@ -1821,6 +1846,7 @@ def fake_preflight(
     runtime_model: str,
     *,
     expected_digest: str | None,
+    runtime_config: object | None = None,
 ) -> dict[str, object]:
     return {
         "endpoint": endpoint,

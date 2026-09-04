@@ -1,6 +1,6 @@
 # Scoring and qualification semantics
 
-The active deployment scoring generation is `gx10-qualification-v4`. It
+The active deployment scoring generation is `gx10-qualification-v5`. It
 combines locally executed, pinned upstream results with the existing
 `hermesbench-v2-automated-1` task evaluator. Numeric scores are secondary to
 hard qualification gates.
@@ -71,7 +71,7 @@ When gates pass, full-profile components use a 0–100 scale:
 | Hermes | 30 | percentage of selected local Hermes tasks with full PASS/evidence/cleanup |
 | tool/instruction | 15 | mean BenchLocal behavioral/targeted pack score |
 | reliability | 10 | Spark repeat reliability; Hermes pass rate when Spark is absent |
-| performance | 5 | equal blend of capped concurrency-1 decode throughput and TTFT normalization, with errors scoring zero |
+| performance | 5 | equal blend of the legacy concurrency-1 Infermark streaming throughput field and TTFT normalization, with errors scoring zero |
 
 For executed components `c` with weights `w`, the displayed aggregate is:
 
@@ -94,9 +94,26 @@ Raw TTFT, ITL, latency distributions, requests/second, tokens/second, request
 counts, errors, context, and concurrency are always shown. Performance cannot
 outvote correctness.
 
-Default full-profile thresholds are aggregate 70, coding 60, Hermes 100,
-tool/instruction 70, and reliability 80. Threshold/configuration changes create
-a materially different deployment experiment and must be recorded.
+The formula and historical scores are intentionally unchanged, but the pinned
+Infermark streaming field name is broader than its measurement. Its
+`tokens_per_second` numerator is the count of non-empty visible
+`delta.content` chunks, not tokenizer tokens, and its denominator is the whole
+concurrency-level wall duration. TTFT is time to first visible content chunk;
+reasoning-content chunks are ignored. Reports therefore label that legacy
+input as E2E visible chunk/s and separately show `1 / mean ITL` as estimated
+visible generation chunks/s. Neither value is claimed as true decode token/s.
+V5 adds SparkBench tier2 token-based decode, prefill, and TTFT as non-scoring
+serving-performance evidence. It deliberately leaves the five-percent legacy
+Infermark performance component unchanged, so this methodology change cannot
+quietly tune the aggregate. Tier2 failure is `UNAVAILABLE` or `PARTIAL` with
+null failed fields and does not invalidate a completed Spark quality result.
+
+V5 provisionally carries forward the v4 full-profile thresholds—aggregate 70,
+coding 60, Hermes 100, tool/instruction 70, and reliability 80.
+Threshold/configuration changes create a materially different deployment
+experiment and must be recorded. This is an explicit cross-model calibration
+hold, not Qwen-specific tuning; raw v5 scores remain authoritative while
+threshold suitability is reviewed after multiple v5 model runs.
 
 ## Public ranking order
 
@@ -112,8 +129,9 @@ coding, Hermes, tool/instruction, reliability, and performance scores
 descending, followed by timestamp and run ID. This tie-break does not alter any
 score. Complete `NOT_QUALIFIED` results use the same deterministic ordering in
 a separate “Completed with profile limitations” table. Repeated trials remain
-separate and are not averaged. V2 thinking-control results are historical
-diagnostics and are excluded from the v4 group even when all other pins match.
+separate and are not averaged. V4 and earlier results remain historical
+diagnostics and are excluded from the v5 group even when all other pins match.
+No external diagnostic reproduction is converted into an official row.
 
 ## Hermes task evaluator
 

@@ -39,7 +39,11 @@ from harness.hermes_runner import (
     validate_result,
 )
 from harness.model_identity import extract_runtime_metadata
-from harness.reasoning_policy import ReasoningPolicyError, parse_reasoning_policy
+from harness.reasoning_policy import (
+    QWEN_ENABLE_THINKING_PROFILE,
+    ReasoningPolicyError,
+    parse_reasoning_policy,
+)
 from harness.workspace import ROOT, content_digest, discover_tasks
 
 
@@ -60,6 +64,8 @@ EXPECTED_EVALUATOR_ISOLATION = (
     "nested-bubblewrap-networkless-test-blind-rpc"
 )
 MAX_METADATA_RESPONSE_BYTES = 4 * 1024 * 1024
+VLLM_PROVENANCE_CONTRACT = "vllm-deployment-provenance-v1"
+VLLM_DIGEST_KIND = "vllm-deployment-provenance"
 
 
 class ConfigurationError(RuntimeError):
@@ -74,6 +80,35 @@ class SuiteInterrupted(KeyboardInterrupt):
     def __init__(self, aggregate: dict[str, Any]) -> None:
         super().__init__("benchmark interrupted")
         self.aggregate = aggregate
+
+
+def vllm_provenance_descriptor(model: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the canonical immutable descriptor hashed for a vLLM deployment."""
+
+    artifacts = model.get("deployment_artifacts")
+    if not isinstance(artifacts, Mapping):
+        raise ConfigurationError("vLLM deployment artifact provenance is missing")
+    return {
+        "checkpoint": artifacts.get("checkpoint"),
+        "checkpoint_revision": artifacts.get("checkpoint_revision"),
+        "contract": artifacts.get("provenance_contract"),
+        "quantization": model.get("quantization"),
+        "runtime_model": model.get("runtime_model"),
+        "serving_implementation": artifacts.get("serving_implementation"),
+        "serving_revision": artifacts.get("serving_revision"),
+    }
+
+
+def vllm_provenance_digest(model: Mapping[str, Any]) -> str:
+    descriptor = vllm_provenance_descriptor(model)
+    encoded = json.dumps(
+        descriptor,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
 def utc_now() -> str:
@@ -179,7 +214,7 @@ def _validate_model_config(alias: str, model: Mapping[str, Any]) -> None:
         )
 
     runtime = model["runtime"]
-    if runtime not in {"ollama", "ds4"}:
+    if runtime not in {"ollama", "ds4", "vllm"}:
         raise ConfigurationError(
             f"model {alias!r} has unsupported runtime {runtime!r}"
         )
@@ -227,6 +262,99 @@ def _validate_model_config(alias: str, model: Mapping[str, Any]) -> None:
             if capabilities.get(field) is not True:
                 raise ConfigurationError(
                     f"DS4 model {alias!r} must record {field} capability"
+                )
+    if runtime == "vllm":
+        for field in ("runtime_version", "api_mode", "reasoning_control_profile"):
+            if not isinstance(model.get(field), str) or not model[field]:
+                raise ConfigurationError(
+                    f"vLLM model {alias!r} has invalid {field}"
+                )
+        if model["api_mode"] != "openai-chat-completions":
+            raise ConfigurationError(
+                f"vLLM model {alias!r} must use OpenAI chat completions"
+            )
+        if model["reasoning_control_profile"] != QWEN_ENABLE_THINKING_PROFILE:
+            raise ConfigurationError(
+                f"vLLM model {alias!r} has an unsupported reasoning control profile"
+            )
+        if type(model.get("endpoint_port")) is not int or model["endpoint_port"] < 1:
+            raise ConfigurationError(
+                f"vLLM model {alias!r} has invalid endpoint_port"
+            )
+        if model.get("runtime_digest_kind") != VLLM_DIGEST_KIND:
+            raise ConfigurationError(
+                f"vLLM model {alias!r} must identify its provenance digest kind"
+            )
+        artifacts = model.get("deployment_artifacts")
+        if not isinstance(artifacts, Mapping):
+            raise ConfigurationError(
+                f"vLLM model {alias!r} has no deployment_artifacts"
+            )
+        required_artifacts = (
+            "checkpoint",
+            "checkpoint_revision",
+            "serving_implementation",
+            "serving_revision",
+            "serving_revision_full",
+        )
+        for field in required_artifacts:
+            if not isinstance(artifacts.get(field), str) or not artifacts[field]:
+                raise ConfigurationError(
+                    f"vLLM model {alias!r} has invalid {field}"
+                )
+        if artifacts.get("provenance_contract") != VLLM_PROVENANCE_CONTRACT:
+            raise ConfigurationError(
+                f"vLLM model {alias!r} has an unsupported provenance contract"
+            )
+        if not re.fullmatch(r"[0-9a-f]{40}", artifacts["checkpoint_revision"]):
+            raise ConfigurationError(
+                f"vLLM model {alias!r} has invalid checkpoint_revision"
+            )
+        if not re.fullmatch(r"[0-9a-f]{7,40}", artifacts["serving_revision"]):
+            raise ConfigurationError(
+                f"vLLM model {alias!r} has invalid serving_revision"
+            )
+        serving_revision_full = artifacts.get("serving_revision_full")
+        if serving_revision_full is not None and not (
+            isinstance(serving_revision_full, str)
+            and re.fullmatch(r"[0-9a-f]{40}", serving_revision_full)
+            and serving_revision_full.startswith(artifacts["serving_revision"])
+        ):
+            raise ConfigurationError(
+                f"vLLM model {alias!r} has invalid serving_revision_full"
+            )
+        if runtime_digest != vllm_provenance_digest(model):
+            raise ConfigurationError(
+                f"vLLM model {alias!r} runtime_digest does not match its "
+                "canonical deployment provenance"
+            )
+        serving_configuration = model.get("serving_configuration")
+        expected_serving_types = {
+            "gpu_memory_utilization": float,
+            "max_num_seqs": int,
+            "mtp_speculative_tokens": int,
+            "prefix_caching": bool,
+            "exact_topk": bool,
+            "prewarm": bool,
+        }
+        if not isinstance(serving_configuration, Mapping):
+            raise ConfigurationError(
+                f"vLLM model {alias!r} has no serving_configuration"
+            )
+        for field, expected_type in expected_serving_types.items():
+            if type(serving_configuration.get(field)) is not expected_type:
+                raise ConfigurationError(
+                    f"vLLM model {alias!r} has invalid serving setting {field}"
+                )
+        capabilities = model.get("capabilities")
+        if not isinstance(capabilities, Mapping):
+            raise ConfigurationError(
+                f"vLLM model {alias!r} has invalid capabilities"
+            )
+        for field in ("streaming", "tool_calls"):
+            if capabilities.get(field) is not True:
+                raise ConfigurationError(
+                    f"vLLM model {alias!r} must record {field} capability"
                 )
 
 
@@ -921,6 +1049,93 @@ def preflight_model(
             "capabilities": dict(runtime_config.get("capabilities") or {}),
             "public_runtime_metadata": runtime_metadata,
         }
+    if runtime == "vllm":
+        if expected_digest is None:
+            raise InfrastructureError(
+                "vLLM requires a configured immutable deployment provenance digest"
+            )
+        try:
+            calculated_digest = vllm_provenance_digest(runtime_config)
+        except ConfigurationError as exc:
+            raise InfrastructureError(str(exc)) from exc
+        if expected_digest != calculated_digest:
+            raise InfrastructureError(
+                "vLLM deployment provenance does not match runtime_digest"
+            )
+        artifacts = runtime_config.get("deployment_artifacts")
+        if not isinstance(artifacts, Mapping):
+            raise InfrastructureError("vLLM deployment artifact provenance is missing")
+        runtime_version = runtime_config.get("runtime_version")
+        if not isinstance(runtime_version, str) or not runtime_version:
+            raise InfrastructureError("vLLM runtime version is missing")
+        match = model_matches[0]
+        max_model_len = match.get("max_model_len")
+        configured_context = runtime_config.get("context_length")
+        if type(max_model_len) is not int or max_model_len < 1:
+            raise InfrastructureError(
+                "vLLM /v1/models did not report a valid max_model_len"
+            )
+        if max_model_len != configured_context:
+            raise InfrastructureError(
+                "vLLM reported max_model_len does not match configured context"
+            )
+        runtime_metadata = {
+            key: runtime_config[key]
+            for key in (
+                "canonical_name",
+                "source_model",
+                "source_version",
+                "architecture",
+                "parameter_variant",
+                "parameter_count",
+                "quantization",
+                "native_context_length",
+            )
+            if runtime_config.get(key) is not None
+        }
+        if "source_version" in runtime_metadata:
+            runtime_metadata["version"] = runtime_metadata.pop("source_version")
+        runtime_metadata["effective_context_length"] = max_model_len
+        runtime_metadata["metadata_sources"] = {
+            "runtime_model": "/v1/models exact identifier match",
+            "runtime_digest": (
+                "models.yaml canonical vLLM deployment provenance descriptor"
+            ),
+            "effective_context_length": "/v1/models max_model_len",
+            "checkpoint": "models.yaml immutable checkpoint revision",
+            "serving_implementation": (
+                "models.yaml immutable serving implementation revision"
+            ),
+        }
+        return {
+            "endpoint": endpoint,
+            "redirect_policy": "reject",
+            "runtime": "vllm",
+            "runtime_version": runtime_version,
+            "runtime_version_source": (
+                "models.yaml installed serving implementation provenance"
+            ),
+            "runtime_model": runtime_model,
+            "reported_id": match.get("id"),
+            "reported_object": match.get("object"),
+            "reported_owner": match.get("owned_by"),
+            "reported_max_model_len": max_model_len,
+            "runtime_model_digest": expected_digest,
+            "runtime_digest_kind": VLLM_DIGEST_KIND,
+            "expected_runtime_digest": expected_digest,
+            "expected_digest_status": "CONFIGURED_PROVENANCE_MATCH",
+            "metadata_endpoints": {
+                "/v1/models": {"method": "GET", "status": "REACHABLE"}
+            },
+            "identity_status": "VERIFIED_MODEL_ID_AND_CONFIGURED_ARTIFACTS",
+            "endpoint_api_mode": "openai-chat-completions",
+            "deployment_artifacts": dict(artifacts),
+            "serving_configuration": dict(
+                runtime_config.get("serving_configuration") or {}
+            ),
+            "capabilities": dict(runtime_config.get("capabilities") or {}),
+            "public_runtime_metadata": runtime_metadata,
+        }
     if runtime != "ollama":
         raise InfrastructureError(f"unsupported model runtime: {runtime}")
 
@@ -1226,6 +1441,7 @@ def _model_result_metadata(plan: dict[str, Any]) -> dict[str, Any]:
             "quantization",
             "context_length",
             "runtime_digest",
+            "runtime_digest_kind",
         )
         if key in model
     }
@@ -1529,11 +1745,14 @@ def _execute_suite_unlocked(
             plan["endpoint"],
             plan["model"]["runtime_model"],
             expected_digest=plan["model"].get("runtime_digest"),
+            runtime_config=plan["model"],
         )
         aggregate["model"]["runtime_digest"] = aggregate["preflight"][
             "runtime_model_digest"
         ]
-        aggregate["model"]["runtime_identity_status"] = "VERIFIED"
+        aggregate["model"]["runtime_identity_status"] = aggregate["preflight"][
+            "identity_status"
+        ]
         aggregate["runtime_identity_verifications"].append(
             {
                 "phase": "PRE_RUN",
@@ -1601,12 +1820,18 @@ def _execute_suite_unlocked(
                     "runtime_digest": aggregate["preflight"][
                         "runtime_model_digest"
                     ],
-                    "runtime_identity_status": "VERIFIED",
+                    "runtime_identity_status": aggregate["preflight"][
+                        "identity_status"
+                    ],
                 }
+                configured_policy = parse_reasoning_policy(
+                    plan["model"]["reasoning_policy"]
+                )
                 result = task_runner(
                     task_id=task["id"],
                     model=plan["model"]["runtime_model"],
-                    reasoning=plan["model"]["reasoning_effort"],
+                    reasoning=configured_policy.hermes_effort,
+                    reasoning_policy=configured_policy.value,
                     max_turns=task["limits"]["agent_turns"],
                     base_url=plan["endpoint"],
                     model_alias=plan["model_alias"],
@@ -1615,6 +1840,7 @@ def _execute_suite_unlocked(
                         **plan["benchmark"],
                         "runtime_identity": aggregate["preflight"],
                     },
+                    runtime=plan["model"]["runtime"],
                     evaluator_timeout=plan["evaluator_timeout_seconds"],
                     state_callback=task_state,
                 )
@@ -1655,6 +1881,7 @@ def _execute_suite_unlocked(
                     expected_digest=aggregate["preflight"][
                         "runtime_model_digest"
                     ],
+                    runtime_config=plan["model"],
                 )
                 aggregate["runtime_identity_verifications"].append(
                     {

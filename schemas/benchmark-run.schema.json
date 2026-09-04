@@ -60,7 +60,11 @@
         },
         "runtime_identity_status": {
           "type": ["string", "null"],
-          "enum": ["VERIFIED", null]
+          "enum": [
+            "VERIFIED",
+            "VERIFIED_MODEL_ID_AND_CONFIGURED_ARTIFACTS",
+            null
+          ]
         }
       }
     },
@@ -128,7 +132,12 @@
                 "type": "string",
                 "pattern": "^sha256:[0-9a-f]{64}$"
               },
-              "runtime_identity_status": {"const": "VERIFIED"}
+              "runtime_identity_status": {
+                "enum": [
+                  "VERIFIED",
+                  "VERIFIED_MODEL_ID_AND_CONFIGURED_ARTIFACTS"
+                ]
+              }
             }
           }
         }

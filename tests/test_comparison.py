@@ -31,11 +31,11 @@ RESULT_SCHEMA = json.loads(
 
 
 class ComparisonTests(unittest.TestCase):
-    def test_current_v4_standard_excludes_v2_thinking_control_runs(self) -> None:
+    def test_current_v5_standard_excludes_v2_thinking_control_runs(self) -> None:
         current = current_standard_compatibility()
         self.assertEqual(
             current["key"]["qualification_generation"],
-            "gx10-qualification-v4",
+            "gx10-qualification-v5",
         )
         self.assertEqual(current["key"]["benchmark_track"], "primary-deployment")
         self.assertEqual(
@@ -74,6 +74,41 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(
             leaderboard["diagnostics"][0]["profile_decision"],
             "MEETS_PROFILE",
+        )
+
+    def test_v4_result_remains_visible_as_unranked_historical_cohort(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runs = root / "runs"
+            runs.mkdir()
+            registry = self._registry(root)
+            self._install(
+                runs,
+                "qualified.json",
+                "historical-v4",
+                mutate=lambda value: self._set_v4_policy(
+                    value, requested="configured", effective="effort:medium"
+                ),
+            )
+            (
+                _summary,
+                _markdown,
+                _json,
+                leaderboard,
+                _public_markdown,
+                _public_json,
+            ) = compare_runs(
+                runs_root=runs,
+                output_root=root / "generated",
+                public_output_root=root / "public",
+                registry_path=registry,
+            )
+        self.assertFalse(leaderboard["qualified"])
+        self.assertEqual(
+            leaderboard["diagnostics"][0]["run_id"], "historical-v4"
+        )
+        self.assertEqual(
+            leaderboard["diagnostics"][0]["status"], "HISTORICAL_COHORT"
         )
 
     def test_configured_deployments_share_primary_track_across_policies(self) -> None:
@@ -413,6 +448,40 @@ class ComparisonTests(unittest.TestCase):
             }
         )
 
+    @staticmethod
+    def _set_infermark_contexts(value: dict[str, Any]) -> None:
+        value["components"].setdefault("upstreams", {})["infermark"] = {
+            "status": "PASS",
+            "score": 100.0,
+            "metrics": {
+                "errors": 0,
+                "contexts": {
+                    "short": {
+                        "tokens_per_second_c1": 0.8590606920916226,
+                        "ttft_seconds_c1": {
+                            "mean": 4.523100332007743,
+                            "p50": 4.523100332007743,
+                        },
+                        "itl_seconds_c1": {
+                            "mean": 0.0804644488856535,
+                            "p50": 0.08319393498823047,
+                        },
+                    },
+                    "medium": {
+                        "tokens_per_second_c1": 1.5025097080801415,
+                        "ttft_seconds_c1": {
+                            "mean": 5.133639942699422,
+                            "p50": 5.501469978131354,
+                        },
+                        "itl_seconds_c1": {
+                            "mean": 0.0824046641709688,
+                            "p50": 0.08390416903421283,
+                        },
+                    },
+                },
+            },
+        }
+
     def _install(
         self,
         runs: Path,
@@ -438,6 +507,193 @@ class ComparisonTests(unittest.TestCase):
                 jsonschema.Draft202012Validator(RESULT_SCHEMA).validate(
                     json.loads(path.read_text(encoding="utf-8"))
                 )
+
+    def test_streaming_performance_is_derived_for_reasoning_and_non_reasoning(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runs = root / "runs"
+            runs.mkdir()
+            registry = self._registry(root)
+
+            def native(value: dict[str, Any]) -> None:
+                self._set_v4_policy(
+                    value, requested="configured", effective="native"
+                )
+                self._set_infermark_contexts(value)
+
+            def off(value: dict[str, Any]) -> None:
+                self._set_v4_policy(
+                    value, requested="configured", effective="off"
+                )
+                self._set_infermark_contexts(value)
+
+            self._install(runs, "qualified.json", "reasoning", mutate=native)
+            self._install(runs, "qualified.json", "non-reasoning", mutate=off)
+            rows = collect_runs(runs, registry_path=registry)
+            by_id = {row["run_id"]: row for row in rows}
+            baseline = by_id["reasoning"]["compatibility"]
+            (
+                _summary,
+                _local_markdown,
+                _local_json,
+                leaderboard,
+                public_markdown,
+                public_json,
+            ) = compare_runs(
+                runs_root=runs,
+                output_root=root / "generated",
+                public_output_root=root / "public",
+                registry_path=registry,
+                current_compatibility=baseline,
+            )
+            public_text = public_markdown.read_text(encoding="utf-8")
+            persisted = json.loads(public_json.read_text(encoding="utf-8"))
+
+        for run_id in ("reasoning", "non-reasoning"):
+            metrics = by_id[run_id]["infermark_c1"]
+            self.assertIsNone(
+                metrics["short"]["generation_tokens_per_second"]
+            )
+            self.assertAlmostEqual(
+                metrics["short"][
+                    "estimated_visible_generation_chunks_per_second"
+                ],
+                12.427848743748696,
+            )
+            self.assertAlmostEqual(
+                metrics["medium"][
+                    "estimated_visible_generation_chunks_per_second"
+                ],
+                12.13523542702939,
+            )
+            self.assertEqual(by_id[run_id]["overall_score"], 82.5)
+            self.assertEqual(
+                by_id[run_id]["component_scores"]["performance"], 55.0
+            )
+        self.assertIn("12.4 / 12.1 est. chunks/s", public_text)
+        self.assertIn("4.523 / 5.134", public_text)
+        self.assertIn("0.859 / 1.503", public_text)
+        self.assertEqual(
+            persisted["qualified"][0]["infermark_c1"],
+            leaderboard["qualified"][0]["infermark_c1"],
+        )
+
+    def test_actual_generation_tokens_are_preferred_when_available(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runs = root / "runs"
+            runs.mkdir()
+            registry = self._registry(root)
+
+            def actual(value: dict[str, Any]) -> None:
+                self._set_v4_policy(
+                    value, requested="configured", effective="off"
+                )
+                self._set_infermark_contexts(value)
+                contexts = value["components"]["upstreams"]["infermark"][
+                    "metrics"
+                ]["contexts"]
+                contexts["short"]["generation_tokens_per_second_c1"] = 22.75
+                contexts["medium"]["generation_tokens_per_second_c1"] = 18.25
+
+            self._install(runs, "qualified.json", "actual", mutate=actual)
+            baseline = collect_runs(runs, registry_path=registry)[0]
+            (
+                _summary,
+                _local_markdown,
+                _local_json,
+                _leaderboard,
+                public_markdown,
+                _public_json,
+            ) = compare_runs(
+                runs_root=runs,
+                output_root=root / "generated",
+                public_output_root=root / "public",
+                registry_path=registry,
+                current_compatibility=baseline["compatibility"],
+            )
+            public_text = public_markdown.read_text(encoding="utf-8")
+        self.assertIn("22.8 / 18.2 tok/s", public_text)
+
+    def test_spark_tier2_generation_is_exposed_without_relabeling_infermark(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runs = root / "runs"
+            runs.mkdir()
+            registry = self._registry(root)
+
+            def actual(value: dict[str, Any]) -> None:
+                self._set_v4_policy(
+                    value, requested="configured", effective="off"
+                )
+                self._set_infermark_contexts(value)
+                value["components"]["upstreams"]["spark-bench"] = {
+                    "status": "PASS",
+                    "score": 90.9,
+                    "metrics": {
+                        "serving_performance": {
+                            "status": "PASS",
+                            "representative_single_stream": {
+                                "context_tokens": 1016,
+                                "generation_tokens_per_second": 16.25,
+                                "prefill_tokens_per_second": 1128.0,
+                                "time_to_first_token_seconds": 0.9,
+                            },
+                        }
+                    },
+                }
+
+            self._install(runs, "qualified.json", "spark-actual", mutate=actual)
+            row = collect_runs(runs, registry_path=registry)[0]
+        self.assertEqual(
+            row["infermark_c1"]["short"]["generation_tokens_per_second"],
+            16.25,
+        )
+        self.assertAlmostEqual(
+            row["infermark_c1"]["short"][
+                "estimated_visible_generation_chunks_per_second"
+            ],
+            12.427848743748696,
+        )
+
+    def test_old_and_missing_infermark_metrics_remain_readable(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runs = root / "runs"
+            runs.mkdir()
+            registry = self._registry(root)
+            self._install(runs, "qualified.json", "old-result")
+            row = collect_runs(runs, registry_path=registry)[0]
+            self.assertEqual(
+                row["infermark_c1"],
+                {
+                    "short": {
+                        "generation_tokens_per_second": None,
+                        "generation_tokens_per_second_source": None,
+                        "prefill_tokens_per_second": None,
+                        "mean_time_to_first_token_seconds": None,
+                        "estimated_visible_generation_chunks_per_second": None,
+                        "mean_time_to_first_visible_chunk_seconds": None,
+                        "end_to_end_visible_output_chunks_per_second": None,
+                    },
+                    "medium": {
+                        "generation_tokens_per_second": None,
+                        "generation_tokens_per_second_source": None,
+                        "prefill_tokens_per_second": None,
+                        "mean_time_to_first_token_seconds": None,
+                        "estimated_visible_generation_chunks_per_second": None,
+                        "mean_time_to_first_visible_chunk_seconds": None,
+                        "end_to_end_visible_output_chunks_per_second": None,
+                    },
+                },
+            )
+            compare_runs(
+                runs_root=runs,
+                output_root=root / "generated",
+                public_output_root=root / "public",
+                registry_path=registry,
+                current_compatibility=row["compatibility"],
+            )
 
     def test_valid_failures_repeats_and_incompatibility_are_preserved(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

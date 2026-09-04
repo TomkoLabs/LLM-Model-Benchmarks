@@ -192,7 +192,7 @@ def write_runtime_hermes_config(
     }
     if runtime == "ollama":
         model_config["ollama_num_ctx"] = context_length
-    elif runtime != "ds4":
+    elif runtime not in {"ds4", "vllm"}:
         raise ValueError(f"unsupported model runtime: {runtime}")
     config = {
         "model": model_config,
@@ -1039,7 +1039,7 @@ def run_once(
             "VERIFIED"
             if runtime == "ollama"
             else "VERIFIED_MODEL_ID_AND_CONFIGURED_ARTIFACTS"
-            if runtime == "ds4"
+            if runtime in {"ds4", "vllm"}
             else None
         )
         if not (

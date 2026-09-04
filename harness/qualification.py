@@ -40,6 +40,7 @@ from harness.reasoning_policy import (
     classify_direct_response,
     reasoning_policy_contract,
     reasoning_policy_selection,
+    parse_reasoning_policy,
     resolve_reasoning_policy,
     runtime_reasoning_control,
 )
@@ -51,12 +52,14 @@ from harness.upstreams import (
     build_benchlocal_command,
     build_infermark_command,
     build_spark_command,
+    build_spark_throughput_command,
     ensure_checkouts,
     execute_upstream,
     load_upstream_lock,
     parse_benchlocal,
     parse_infermark,
     parse_spark,
+    parse_spark_throughput,
     safe_slug,
     upstream_environment,
     write_local_network_policy,
@@ -64,7 +67,19 @@ from harness.upstreams import (
 )
 
 
-CONFIG_PATH = ROOT / "configs" / "qualification-v4.yaml"
+DEFAULT_QUALIFICATION_GENERATION = "gx10-qualification-v5"
+QUALIFICATION_SOURCES = {
+    "gx10-qualification-v4": (
+        ROOT / "configs" / "qualification-v4.yaml",
+        ROOT / "upstreams.lock.json",
+    ),
+    "gx10-qualification-v5": (
+        ROOT / "configs" / "qualification-v5.yaml",
+        ROOT / "upstreams-v5.lock.json",
+    ),
+}
+# Kept as the active-generation alias for callers that only need the default.
+CONFIG_PATH = QUALIFICATION_SOURCES[DEFAULT_QUALIFICATION_GENERATION][0]
 LOCAL_CONFIG_PATH = ROOT / "config" / "local.yaml"
 MODELS_PATH = ROOT / "models.yaml"
 RUNS_ROOT = ROOT / "runs"
@@ -82,6 +97,16 @@ class QualificationQuarantine(QualificationError):
     pass
 
 
+def attach_optional_spark_throughput(
+    quality_result: dict[str, Any],
+    serving_performance: Mapping[str, Any],
+) -> None:
+    metrics = quality_result.get("metrics")
+    if not isinstance(metrics, dict):
+        raise QualificationError("Spark quality metrics are missing")
+    metrics["serving_performance"] = dict(serving_performance)
+
+
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
@@ -96,11 +121,23 @@ def _load_yaml(path: Path, label: str) -> dict[str, Any]:
     return value
 
 
-def load_configuration() -> dict[str, Any]:
-    config = _load_yaml(CONFIG_PATH, "qualification configuration")
+def qualification_sources(generation: str) -> tuple[Path, Path]:
+    try:
+        return QUALIFICATION_SOURCES[generation]
+    except KeyError as exc:
+        raise QualificationError(
+            f"unsupported qualification generation: {generation}"
+        ) from exc
+
+
+def load_configuration(
+    generation: str = DEFAULT_QUALIFICATION_GENERATION,
+) -> dict[str, Any]:
+    config_path, _lock_path = qualification_sources(generation)
+    config = _load_yaml(config_path, "qualification configuration")
     if config.get("schema_version") != 1:
         raise QualificationError("unsupported qualification configuration schema")
-    if config.get("generation") != "gx10-qualification-v4":
+    if config.get("generation") != generation:
         raise QualificationError("incompatible qualification generation")
     profiles = config.get("profiles")
     if not isinstance(profiles, dict) or set(profiles) != {"smoke", "standard", "overnight"}:
@@ -116,6 +153,39 @@ def load_configuration() -> dict[str, Any]:
             "qualification direct_probe must freeze the v1 contract at "
             f"{DIRECT_PROBE_MAX_TOKENS} max_tokens"
         )
+    if generation == "gx10-qualification-v5":
+        standard = profiles["standard"]
+        smoke = profiles["smoke"]
+        spark = standard.get("spark")
+        expected = {
+            "methodology": "v6.8.0-full-uncapped",
+            "tier": "all",
+            "repeats": 2,
+            "temperature": 0.3,
+            "thinking": "off",
+            "uncapped": True,
+            "timeout": 0,
+            "skip_throughput": True,
+        }
+        if smoke.get("spark") is not None:
+            raise QualificationError("v5 smoke must not run SparkBench")
+        if not isinstance(spark, Mapping) or any(
+            spark.get(key) != value for key, value in expected.items()
+        ):
+            raise QualificationError(
+                "v5 standard SparkBench methodology settings are incompatible"
+            )
+        throughput = spark.get("throughput")
+        if not (
+            isinstance(throughput, Mapping)
+            and throughput.get("enabled") is True
+            and throughput.get("required") is False
+            and type(throughput.get("timeout")) is int
+            and throughput["timeout"] > 0
+        ):
+            raise QualificationError(
+                "v5 SparkBench throughput must be separate, optional, and use a positive request timeout"
+            )
     return config
 
 
@@ -139,7 +209,14 @@ def resolve_endpoint(
                 for model in models.values()
                 if model.get("runtime_model") == requested_model
             ]
-            if len(matches) == 1:
+            defaults = [
+                model
+                for model in matches
+                if model.get("default_for_runtime") is True
+            ]
+            if len(defaults) == 1:
+                configured = defaults[0]
+            elif len(matches) == 1:
                 configured = matches[0]
         endpoint_port = (
             configured.get("endpoint_port")
@@ -195,6 +272,20 @@ def _curated_model(
             "runtime_digest": "models.yaml operator-verified base GGUF checksum",
             "dspark_drafter": "models.yaml operator-verified DSpark checksum",
             "effective_context_length": "models.yaml configured DS4 context",
+            "reasoning_policy": "models.yaml curated deployment policy",
+            "supported_reasoning_policies": "models.yaml explicit support list",
+        }
+    elif model.get("runtime") == "vllm":
+        model["metadata_sources"] = {
+            "runtime_model": "models.yaml; verified by /v1/models",
+            "runtime_digest": (
+                "models.yaml canonical deployment provenance descriptor"
+            ),
+            "checkpoint": "models.yaml immutable checkpoint revision",
+            "serving_implementation": (
+                "models.yaml immutable serving implementation revision"
+            ),
+            "effective_context_length": "/v1/models max_model_len",
             "reasoning_policy": "models.yaml curated deployment policy",
             "supported_reasoning_policies": "models.yaml explicit support list",
         }
@@ -721,6 +812,20 @@ def render_report(result: Mapping[str, Any]) -> str:
         "METADATA_INCOMPLETE — "
         + str(model.get("runtime_digest") or "digest unavailable")
     )
+    upstreams = result.get("components", {}).get("upstreams", {})
+    upstreams = upstreams if isinstance(upstreams, Mapping) else {}
+    spark = upstreams.get("spark-bench")
+    spark = spark if isinstance(spark, Mapping) else {}
+    spark_metrics = spark.get("metrics")
+    spark_metrics = spark_metrics if isinstance(spark_metrics, Mapping) else {}
+    serving_performance = spark_metrics.get("serving_performance")
+    serving_performance = (
+        serving_performance
+        if isinstance(serving_performance, Mapping)
+        else {}
+    )
+    representative = serving_performance.get("representative_single_stream")
+    representative = representative if isinstance(representative, Mapping) else {}
     lines = [
         "# LLM Model Benchmarks qualification report",
         "",
@@ -763,6 +868,13 @@ def render_report(result: Mapping[str, Any]) -> str:
             separators=(",", ":"),
         )
         + "`",
+        f"- Spark serving performance: `{serving_performance.get('status', 'not executed')}`",
+        "- Representative Generation tok/s: `"
+        f"{representative.get('generation_tokens_per_second')}` at prompt context `"
+        f"{representative.get('context_tokens')}`",
+        "- Representative prefill tok/s: `"
+        f"{representative.get('prefill_tokens_per_second')}` / TTFT seconds `"
+        f"{representative.get('time_to_first_token_seconds')}`",
         "",
         "## Deployment score",
         "",
@@ -854,10 +966,13 @@ def _dry_plan(
     reasoning_policy_request: str,
     reasoning_policy: ReasoningPolicy,
     reasoning_policy_source: str,
+    qualification_generation: str = DEFAULT_QUALIFICATION_GENERATION,
     runtime: str = "ollama",
+    reasoning_control_profile: str | None = None,
 ) -> dict[str, Any]:
-    configuration = load_configuration()
-    lock = load_upstream_lock()
+    configuration = load_configuration(qualification_generation)
+    _config_path, lock_path = qualification_sources(qualification_generation)
+    lock = load_upstream_lock(lock_path)
     pseudo = ROOT / "runs" / "DRY-RUN"
     commands: list[list[str]] = []
     if profile.get("spark"):
@@ -872,6 +987,18 @@ def _dry_plan(
                 reasoning_policy=reasoning_policy,
             )
         )
+        throughput = profile["spark"].get("throughput")
+        if isinstance(throughput, Mapping) and throughput.get("enabled") is True:
+            commands.append(
+                build_spark_throughput_command(
+                    ROOT / lock["spark-bench"]["checkout"],
+                    endpoint=endpoint.base_url,
+                    model=model,
+                    output_dir=pseudo / "artifacts" / "spark-bench-throughput",
+                    label="dry-run-throughput",
+                    profile=throughput,
+                )
+            )
     for selection in profile.get("benchlocal", []):
         commands.append(
             build_benchlocal_command(
@@ -909,8 +1036,12 @@ def _dry_plan(
             "selection_mode": selection_mode,
             "benchmark_track": benchmark_track,
             "cohort": reasoning_policy.cohort,
+            "control_profile": reasoning_control_profile,
             "openai_chat_completions": runtime_reasoning_control(
-                runtime, "openai-chat-completions", reasoning_policy
+                runtime,
+                "openai-chat-completions",
+                reasoning_policy,
+                reasoning_control_profile,
             ),
             **(
                 {
@@ -928,6 +1059,17 @@ def _dry_plan(
         "model_resolution": model_resolution,
         "expected_duration": profile["expected_duration"],
         "commands": commands,
+        "component_reasoning_policies": {
+            **(
+                {
+                    "spark-bench": "off",
+                    "spark-bench-throughput": "off",
+                }
+                if isinstance(profile.get("spark"), Mapping)
+                and profile["spark"].get("thinking") == "off"
+                else {}
+            )
+        },
         "hermes_tasks": profile["hermes_tasks"],
         "contacts_endpoint": False,
     }
@@ -939,13 +1081,26 @@ def _upstream_python_paths(
     policy_dir: Path,
 ) -> list[Path]:
     paths = [policy_dir]
-    if name == "spark-bench":
+    if name.startswith("spark-bench"):
         paths.append(SPARK_PYTHON_DEPS)
     elif name.startswith("benchlocal-"):
         paths.append(checkout)
     elif name.startswith("infermark-"):
         paths.append(checkout / "src")
     return paths
+
+
+def _transport_observer_matches_deployment(
+    observation: Mapping[str, Any],
+    reasoning_policy: ReasoningPolicy,
+) -> bool:
+    return (
+        observation.get("observer_ok") is True
+        and bool(observation.get("request_count"))
+        and bool(observation.get("response_count"))
+        and observation.get("deployment_reasoning_policy")
+        == reasoning_policy.value
+    )
 
 
 def execute(
@@ -955,9 +1110,11 @@ def execute(
     profile_name: str,
     setup: bool,
     reasoning_policy_request: str,
+    qualification_generation: str = DEFAULT_QUALIFICATION_GENERATION,
 ) -> tuple[int, dict[str, Any]]:
     global _ACTIVE_RUN_CONTEXT
-    config = load_configuration()
+    config_path, lock_path = qualification_sources(qualification_generation)
+    config = load_configuration(qualification_generation)
     if profile_name not in config["profiles"]:
         raise QualificationError(f"unknown profile: {profile_name}")
     profile = config["profiles"][profile_name]
@@ -969,6 +1126,12 @@ def execute(
         endpoint=endpoint.base_url,
     )
     runtime = str(model_config.get("runtime") or "ollama")
+    reasoning_control_profile = model_config.get("reasoning_control_profile")
+    reasoning_control_profile = (
+        str(reasoning_control_profile)
+        if isinstance(reasoning_control_profile, str)
+        else None
+    )
     try:
         reasoning_policy, reasoning_policy_source = resolve_reasoning_policy(
             reasoning_policy_request, model_config
@@ -979,7 +1142,10 @@ def execute(
         reasoning_policy_request
     )
     openai_control = runtime_reasoning_control(
-        runtime, "openai-chat-completions", reasoning_policy
+        runtime,
+        "openai-chat-completions",
+        reasoning_policy,
+        reasoning_control_profile,
     )
     native_control = (
         runtime_reasoning_control(runtime, "ollama-native-chat", reasoning_policy)
@@ -1030,6 +1196,8 @@ def execute(
         "profile": profile_name,
         "qualification_generation": config["generation"],
         "scoring_version": config["generation"],
+        "thresholds": dict(config["thresholds"]),
+        "threshold_calibration": config.get("threshold_calibration", "frozen"),
         "profile_config": profile,
         "direct_probe": direct_probe_config,
         "reasoning_policy": {
@@ -1040,6 +1208,7 @@ def execute(
             "selection_mode": reasoning_policy_selection_mode,
             "benchmark_track": benchmark_track,
             "cohort": reasoning_policy.cohort,
+            "control_profile": reasoning_control_profile,
             "serialized_endpoint_controls": {
                 "openai_chat_completions": openai_control,
                 **(
@@ -1065,9 +1234,11 @@ def execute(
             "cpu_count": os.cpu_count(),
         },
         "invocations": {},
-        "configuration_sha256": hashlib.sha256(CONFIG_PATH.read_bytes()).hexdigest(),
+        "qualification_configuration": str(config_path.relative_to(ROOT)),
+        "upstream_lock": str(lock_path.relative_to(ROOT)),
+        "configuration_sha256": hashlib.sha256(config_path.read_bytes()).hexdigest(),
         "models_sha256": hashlib.sha256(MODELS_PATH.read_bytes()).hexdigest(),
-        "upstream_lock_sha256": hashlib.sha256((ROOT / "upstreams.lock.json").read_bytes()).hexdigest(),
+        "upstream_lock_sha256": hashlib.sha256(lock_path.read_bytes()).hexdigest(),
     }
     _ACTIVE_RUN_CONTEXT = {
         "run_dir": run_dir,
@@ -1087,7 +1258,7 @@ def execute(
     partial: dict[str, Any] = {"run_id": run_id, "status": "RUNNING", "components": {}}
     _atomic_json(run_dir / "partial-results.json", partial, run_dir)
 
-    upstream_provenance = ensure_checkouts(setup=setup)
+    upstream_provenance = ensure_checkouts(setup=setup, lock_path=lock_path)
     manifest["upstreams"] = upstream_provenance
     _atomic_json(run_dir / "manifest.json", manifest, run_dir)
 
@@ -1150,6 +1321,10 @@ def execute(
         observations_path=direct_observations_path,
         upstream_timeout=remaining_profile_seconds(),
         runtime=runtime,
+        reasoning_control_profile=reasoning_control_profile,
+        honor_request_reasoning_controls=(
+            reasoning_policy_selection_mode == "configured"
+        ),
     ) as gateway:
         manifest.setdefault("model_transport_boundaries", {})["direct"] = (
             gateway.metadata
@@ -1166,11 +1341,11 @@ def execute(
     )
     direct["model_transport"] = direct_transport
     if not (
-        direct_transport["observer_ok"]
+        _transport_observer_matches_deployment(
+            direct_transport, reasoning_policy
+        )
         and direct_transport["request_count"] == 2
         and direct_transport["response_count"] == 2
-        and direct_transport["requested_reasoning_policy"]
-        == reasoning_policy.value
     ):
         raise QualificationError(
             "direct model transport observer is missing or broken"
@@ -1181,60 +1356,75 @@ def execute(
     upstream_results: dict[str, Any] = {}
     blocked_attempts: list[dict[str, Any]] = []
     transport_observations: dict[str, dict[str, Any]] = {}
-    lock = load_upstream_lock()
-
     def run_upstream_component(
         name: str,
         command_factory: Callable[[str], Sequence[str]],
         checkout: Path,
         heartbeat_paths: Sequence[Path],
+        total_timeout: float | None = None,
+        gateway_policy: ReasoningPolicy | None = None,
     ) -> None:
         component_dir = artifacts / name
         component_dir.mkdir(parents=True, exist_ok=True)
         observations_path = component_dir / "model-transport-observations.jsonl"
-        with ModelGateway(
-            target_base_url=endpoint.base_url,
-            policy=reasoning_policy,
-            stage=name,
-            observations_path=observations_path,
-            upstream_timeout=remaining_profile_seconds(),
-            runtime=runtime,
-        ) as gateway:
-            command = list(command_factory(gateway.endpoint.base_url))
-            manifest["invocations"][name] = command
-            manifest.setdefault("model_transport_boundaries", {})[name] = (
-                gateway.metadata
-            )
-            _atomic_json(run_dir / "manifest.json", manifest, run_dir)
-            policy_dir, attempts_path = write_local_network_policy(
-                component_dir / "python-policy", gateway.endpoint
-            )
-            python_paths = _upstream_python_paths(name, checkout, policy_dir)
-            env = upstream_environment(python_paths=python_paths)
-            if name == "spark-bench":
-                chromium_wrapper = write_chromium_network_wrapper(
-                    component_dir / "chromium-policy"
+        attempts_path: Path | None = None
+        execution_error: BaseException | None = None
+        component_policy = gateway_policy or reasoning_policy
+        try:
+            with ModelGateway(
+                target_base_url=endpoint.base_url,
+                policy=component_policy,
+                stage=name,
+                observations_path=observations_path,
+                upstream_timeout=remaining_profile_seconds(),
+                runtime=runtime,
+                reasoning_control_profile=reasoning_control_profile,
+                honor_request_reasoning_controls=(
+                    reasoning_policy_selection_mode == "configured"
+                ),
+            ) as gateway:
+                command = list(command_factory(gateway.endpoint.base_url))
+                manifest["invocations"][name] = command
+                manifest.setdefault("model_transport_boundaries", {})[name] = (
+                    gateway.metadata
                 )
-                env["SPARK_BENCH_CHROMIUM"] = str(chromium_wrapper)
-                raw_http_dir = component_dir / "raw-http"
-                raw_http_dir.mkdir()
-                env["SPARK_BENCH_DUMP_DIR"] = str(raw_http_dir)
-                manifest.setdefault("runtime_policies", {})[name] = {
-                    "chromium_wrapper": str(chromium_wrapper),
-                    "browser_network": "dead-proxy-with-loopback-only-bypass",
-                    "model_transport_boundary": gateway.endpoint.base_url,
-                }
                 _atomic_json(run_dir / "manifest.json", manifest, run_dir)
-            execute_upstream(
-                command,
-                cwd=checkout,
-                env=env,
-                log_path=logs / f"{name}.log",
-                total_timeout=remaining_profile_seconds(),
-                inactivity_timeout=float(profile["inactivity_seconds"]),
-                heartbeat_paths=heartbeat_paths,
-            )
-        if attempts_path.is_file():
+                policy_dir, attempts_path = write_local_network_policy(
+                    component_dir / "python-policy", gateway.endpoint
+                )
+                python_paths = _upstream_python_paths(name, checkout, policy_dir)
+                env = upstream_environment(python_paths=python_paths)
+                if name.startswith("spark-bench"):
+                    chromium_wrapper = write_chromium_network_wrapper(
+                        component_dir / "chromium-policy"
+                    )
+                    env["SPARK_BENCH_CHROMIUM"] = str(chromium_wrapper)
+                    raw_http_dir = component_dir / "raw-http"
+                    raw_http_dir.mkdir()
+                    env["SPARK_BENCH_DUMP_DIR"] = str(raw_http_dir)
+                    manifest.setdefault("runtime_policies", {})[name] = {
+                        "chromium_wrapper": str(chromium_wrapper),
+                        "browser_network": "dead-proxy-with-loopback-only-bypass",
+                        "model_transport_boundary": gateway.endpoint.base_url,
+                    }
+                    _atomic_json(run_dir / "manifest.json", manifest, run_dir)
+                remaining = remaining_profile_seconds()
+                execute_upstream(
+                    command,
+                    cwd=checkout,
+                    env=env,
+                    log_path=logs / f"{name}.log",
+                    total_timeout=(
+                        min(remaining, total_timeout)
+                        if total_timeout is not None
+                        else remaining
+                    ),
+                    inactivity_timeout=float(profile["inactivity_seconds"]),
+                    heartbeat_paths=heartbeat_paths,
+                )
+        except BaseException as exc:
+            execution_error = exc
+        if attempts_path is not None and attempts_path.is_file():
             for line in attempts_path.read_text(encoding="utf-8").splitlines():
                 try:
                     blocked_attempts.append({"component": name, **json.loads(line)})
@@ -1243,13 +1433,11 @@ def execute(
         transport_observations[name] = read_model_transport_observations(
             observations_path
         )
+        if execution_error is not None:
+            raise execution_error
         observation = transport_observations[name]
-        if not (
-            observation["observer_ok"]
-            and observation["request_count"]
-            and observation["response_count"]
-            and observation["requested_reasoning_policy"]
-            == reasoning_policy.value
+        if not _transport_observer_matches_deployment(
+            observation, component_policy
         ):
             raise UpstreamError(
                 f"{name} model transport observer is missing or broken"
@@ -1261,6 +1449,23 @@ def execute(
         output = artifacts / "spark-bench"
         output.mkdir()
         label = f"gx10-{safe_slug(runtime_model, maximum=40)}-{profile_name}"
+        spark_gateway_policy = (
+            parse_reasoning_policy("off")
+            if spark_profile.get("thinking") == "off"
+            else reasoning_policy
+        )
+        manifest.setdefault("component_reasoning_policies", {}).update(
+            {
+                "spark-bench": spark_gateway_policy.value,
+                **(
+                    {"spark-bench-throughput": spark_gateway_policy.value}
+                    if isinstance(spark_profile.get("throughput"), Mapping)
+                    and spark_profile["throughput"].get("enabled") is True
+                    else {}
+                ),
+            }
+        )
+        _atomic_json(run_dir / "manifest.json", manifest, run_dir)
         run_upstream_component(
             "spark-bench",
             lambda gateway_endpoint: build_spark_command(
@@ -1274,9 +1479,12 @@ def execute(
             ),
             checkout,
             (output / "runs",),
+            gateway_policy=spark_gateway_policy,
         )
         upstream_results["spark-bench"] = parse_spark(
-            output / "spark_bench.csv", model=runtime_model
+            output / "spark_bench.csv",
+            model=runtime_model,
+            expected_methodology=spark_profile.get("methodology"),
         )
         upstream_results["spark-bench"]["model_transport"] = (
             transport_observations["spark-bench"]
@@ -1288,6 +1496,87 @@ def execute(
             raise QualificationQuarantine(
                 f"Spark Bench completed but was quarantined: {reason}"
             )
+        throughput_profile = spark_profile.get("throughput")
+        if (
+            isinstance(throughput_profile, Mapping)
+            and throughput_profile.get("enabled") is True
+        ):
+            throughput_name = "spark-bench-throughput"
+            throughput_output = artifacts / throughput_name
+            throughput_output.mkdir()
+            try:
+                run_upstream_component(
+                    throughput_name,
+                    lambda gateway_endpoint: build_spark_throughput_command(
+                        checkout,
+                        endpoint=gateway_endpoint,
+                        model=runtime_model,
+                        output_dir=throughput_output,
+                        label=label + "-throughput",
+                        profile=throughput_profile,
+                    ),
+                    checkout,
+                    (throughput_output / "runs",),
+                    total_timeout=float(
+                        throughput_profile.get("total_wall_seconds", 3600)
+                    ),
+                    gateway_policy=spark_gateway_policy,
+                )
+                serving_performance = parse_spark_throughput(
+                    throughput_output / "spark_bench.csv",
+                    model=runtime_model,
+                    raw_dump_path=(
+                        throughput_output / "raw-http" / "raw_dump.jsonl"
+                    ),
+                )
+            except Exception as exc:
+                if throughput_profile.get("required") is True:
+                    raise
+                try:
+                    serving_performance = parse_spark_throughput(
+                        throughput_output / "spark_bench.csv",
+                        model=runtime_model,
+                        raw_dump_path=(
+                            throughput_output / "raw-http" / "raw_dump.jsonl"
+                        ),
+                    )
+                except UpstreamError:
+                    serving_performance = {
+                        "status": "UNAVAILABLE",
+                        "run_id": None,
+                        "representative_single_stream": None,
+                        "contexts": {},
+                        "concurrency": {},
+                        "errors": [],
+                        "generation_tokens_per_second_definition": (
+                            "SparkBench v6.8 tier2 completion_tokens divided by "
+                            "elapsed streaming time after first reasoning, content, "
+                            "or tool-call token"
+                        ),
+                    }
+                serving_performance["status"] = (
+                    "PARTIAL"
+                    if serving_performance.get("representative_single_stream")
+                    is not None
+                    else "UNAVAILABLE"
+                )
+                serving_performance.setdefault("errors", []).append(
+                    {
+                        "workload": "tier2",
+                        "context_tokens": None,
+                        "concurrency": None,
+                        "error": f"{type(exc).__name__}: {exc}",
+                    }
+                )
+            throughput_transport = transport_observations.get(throughput_name)
+            if throughput_transport is not None:
+                serving_performance["model_transport"] = throughput_transport
+            attach_optional_spark_throughput(
+                upstream_results["spark-bench"], serving_performance
+            )
+            partial["components"]["upstreams"] = upstream_results
+            partial["components"]["blocked_network_attempts"] = blocked_attempts
+            _atomic_json(run_dir / "partial-results.json", partial, run_dir)
 
     for selection in profile.get("benchlocal", []):
         component_name = f"benchlocal-{selection['id']}"
@@ -1402,6 +1691,10 @@ def execute(
             observations_path=hermes_transport_path,
             upstream_timeout=remaining_profile_seconds(),
             runtime=runtime,
+            reasoning_control_profile=reasoning_control_profile,
+            honor_request_reasoning_controls=(
+                reasoning_policy_selection_mode == "configured"
+            ),
         ) as gateway:
             manifest.setdefault("model_transport_boundaries", {})[
                 f"hermes-{task_id}"
@@ -1464,10 +1757,12 @@ def execute(
         "runtime_model": runtime_model,
         "runtime": runtime,
         "runtime_digest": preflight["runtime_model_digest"],
+        "runtime_digest_kind": effective_model_config.get("runtime_digest_kind"),
         "endpoint": endpoint.base_url,
         "quantization": effective_model_config["quantization"],
         "context_length": effective_model_config["context_length"],
         "reasoning_policy": reasoning_policy.value,
+        "reasoning_control_profile": reasoning_control_profile,
         "reasoning_cohort": reasoning_policy.cohort,
         "reasoning_policy_selection_mode": reasoning_policy_selection_mode,
         "benchmark_track": benchmark_track,
@@ -1492,6 +1787,9 @@ def execute(
         "metadata_discrepancies": metadata_discrepancies,
         "deployment_artifacts": effective_model_config.get(
             "deployment_artifacts"
+        ),
+        "serving_configuration": effective_model_config.get(
+            "serving_configuration"
         ),
         "runtime_version": preflight.get("runtime_version"),
         "endpoint_api_mode": effective_model_config.get("api_mode"),
@@ -1633,6 +1931,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--endpoint", help="Local OpenAI-compatible /v1 URL")
     parser.add_argument("--profile", choices=("smoke", "standard", "overnight"), default="standard")
     parser.add_argument(
+        "--qualification-generation",
+        choices=tuple(QUALIFICATION_SOURCES),
+        default=DEFAULT_QUALIFICATION_GENERATION,
+        help="Qualification methodology generation (v5 is current; v4 is replay-only)",
+    )
+    parser.add_argument(
         "--reasoning-policy",
         choices=("configured", *SUPPORTED_REASONING_POLICIES),
         default="configured",
@@ -1701,14 +2005,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(render_public_terminal(leaderboard), end="")
             return 0
         if args.list_upstreams:
-            print(json.dumps(load_upstream_lock(), indent=2))
+            _config_path, lock_path = qualification_sources(
+                args.qualification_generation
+            )
+            print(json.dumps(load_upstream_lock(lock_path), indent=2))
             return 0
         if args.setup_only:
-            print(json.dumps(ensure_checkouts(setup=not args.no_setup), indent=2))
+            _config_path, lock_path = qualification_sources(
+                args.qualification_generation
+            )
+            print(
+                json.dumps(
+                    ensure_checkouts(
+                        setup=not args.no_setup,
+                        lock_path=lock_path,
+                    ),
+                    indent=2,
+                )
+            )
             return 0
         if not args.model:
             parser.error("--model is required unless --setup-only or --list-upstreams is used")
-        config = load_configuration()
+        config = load_configuration(args.qualification_generation)
         endpoint = resolve_endpoint(args.endpoint, args.model)
         _alias, runtime_model, _model, _preflight = resolve_model(args.model)
         profile = config["profiles"][args.profile]
@@ -1732,7 +2050,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                         reasoning_policy_request=args.reasoning_policy,
                         reasoning_policy=dry_policy,
                         reasoning_policy_source=dry_policy_source,
+                        qualification_generation=args.qualification_generation,
                         runtime=str(_model.get("runtime") or "ollama"),
+                        reasoning_control_profile=(
+                            str(_model["reasoning_control_profile"])
+                            if isinstance(
+                                _model.get("reasoning_control_profile"), str
+                            )
+                            else None
+                        ),
                     ),
                     indent=2,
                 )
@@ -1744,6 +2070,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             profile_name=args.profile,
             setup=not args.no_setup,
             reasoning_policy_request=args.reasoning_policy,
+            qualification_generation=args.qualification_generation,
         )
         identity = result["model"].get("public_identity", {})
         print(f"outcome={result['outcome']}")

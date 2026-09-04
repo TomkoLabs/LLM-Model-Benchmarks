@@ -4,7 +4,7 @@
 [Canonical repository](https://github.com/TomkoLabs/LLM-Model-Benchmarks)
 
 LLM Model Benchmarks is a hybrid local deployment-qualification harness for
-coding models served through Ollama's OpenAI-compatible API. Spark Bench,
+coding models served through curated Ollama, DS4, and vLLM adapters. Spark Bench,
 BenchLocal, and Infermark primarily exercise the configured model endpoint
 directly. Hermes stages run controlled repository tasks through Hermes Agent.
 Together they qualify the complete local deployment stack—not only Hermes and
@@ -33,20 +33,20 @@ Real-work acceptance remains the final model-selection step.
 
 This is a stable, frozen reference release. It has no active feature roadmap
 or promise of frequent upstream-pin updates. The completed configured-policy
-GX10 v4 round ranks DeepSeek V4 Flash first because it met every hard gate.
-Ornith 1.5 Q8 remains visible as a valid `DOES_NOT_MEET_PROFILE` deployment;
-its 79.9 reliability score was below the 80.0 gate. Such a result describes one
-exact deployment and is not a universal judgment about its model family.
+GX10 v5 cohort contains seven standard deployments. Qwen3.8-Flash-Next NVFP4
+and Laguna-S-2.1-Uncensored at 262144 context met every hard gate; other valid
+completed deployments remain visible as `DOES_NOT_MEET_PROFILE` results. V4
+is retained as historical, non-comparable evidence.
 
 ## Supported platform
 
 The model-serving baseline is one NVIDIA GB10/GX10-class system running Linux,
-with one model deployment active at a time. Curated deployments may use Ollama
-or the DS4 OpenAI-compatible adapter. The harness supports both co-location on
-that GX10 and the currently exercised split layout: a Linux controller runs
-this harness, Hermes Agent `0.20.4`, Bubblewrap, and Chromium against an
-explicitly configured numeric private-network GX10 endpoint. The same endpoint
-and fail-closed network policy apply in both layouts.
+with one model runtime loaded at a time. Ollama `0.32.15` remains the frozen
+baseline runtime. The harness supports both
+co-location on that GX10 and the currently exercised split layout: a Linux
+controller runs this harness, Hermes Agent `0.20.4`, Bubblewrap, and Chromium
+against an explicitly configured numeric private-network GX10 endpoint. The
+same endpoint and fail-closed network policy apply in both layouts.
 
 Other Linux systems and private OpenAI-compatible deployments may work, but
 their results describe those deployments and should not be compared with the
@@ -59,11 +59,10 @@ Bubblewrap.
 
 - A clean Git checkout and an unprivileged Linux user with user namespaces
   enabled.
-- An already-installed model deployment. The benchmark never pulls, removes,
-  renames, loads, starts, stops, or changes a model.
-- Either an Ollama endpoint exposing `/v1/models`, `/v1/chat/completions`,
-  `/api/tags`, `/api/show`, and `/api/version`, or a curated DS4 endpoint
-  exposing `/v1/models` and `/v1/chat/completions`.
+- An already-installed curated model runtime. The benchmark never pulls,
+  removes, renames, loads, switches, or changes a model.
+- Its adapter's read-only metadata and OpenAI-compatible inference endpoints.
+  Ollama additionally requires `/api/tags`, `/api/show`, and `/api/version`.
 - curl, Git, Bubblewrap at `/usr/bin/bwrap`, Chromium at `/usr/bin/chromium`, and
   system Python at `/usr/bin/python3`.
 - Hermes Agent `0.20.4` at commit
@@ -109,8 +108,8 @@ for the active profiles.
 
 ## Quick start
 
-After bootstrap, point the harness at a local Ollama-compatible endpoint and
-inspect the fully resolved plan without inference:
+After bootstrap, point the harness at a local compatible endpoint and inspect
+the fully resolved plan without inference:
 
 ```sh
 export HERMES_BENCH_ENDPOINT=http://localhost:11434/v1
@@ -152,12 +151,21 @@ it never guesses from the native checkpoint maximum or from the alias name.
 
 Curated deployments may instead select the `ds4` runtime adapter. That adapter
 uses only `/v1/models` and `/v1/chat/completions`; it never sends Ollama-native
-requests. DS4 entries freeze the installed runtime version, configured context,
-base GGUF and DSpark drafter checksums, DSpark state, API mode, reasoning
-control, and streaming/tool-call capabilities. The runner records that
-provenance with the endpoint-reported exact model identifier. It does not
+requests. DS4 entries must freeze the installed runtime version, configured
+context, base GGUF and DSpark drafter checksums, DSpark state, API mode,
+reasoning control, and streaming/tool-call capabilities. The runner records
+that provenance with the endpoint-reported exact model identifier. It does not
 start, stop, or switch model engines automatically; operators must establish
 the intended runtime before preflight.
+
+The `vllm` adapter is likewise restricted to `/v1/models` and
+`/v1/chat/completions`. A curated vLLM entry freezes the exact checkpoint and
+revision, serving implementation and revision, quantization, context, API
+capabilities, and a named reasoning-control profile. Because vLLM does not
+report a weight-file checksum through this API, `runtime_digest` is explicitly
+the SHA-256 of the versioned canonical deployment-provenance descriptor—not a
+weight digest. Preflight recomputes that digest and verifies the exact model ID
+and reported `max_model_len` without probing Ollama endpoints.
 
 `models.yaml` schema v3 remains the higher-precedence home for curated run-local
 contexts, explicit reasoning policies, supported policies, and frozen
@@ -182,6 +190,13 @@ Verify the offline plan before contacting the model:
 
 ```sh
 ./benchmark-model --model <configured-alias-or-runtime-tag> --profile smoke --dry-run
+```
+
+`gx10-qualification-v5` is the default generation. Historical v4 replay is
+explicit and uses its original configuration and upstream lock:
+
+```sh
+./benchmark-model --qualification-generation gx10-qualification-v4 --model <alias> --profile standard
 ```
 
 The default `--reasoning-policy configured` resolves the exact curated policy
@@ -237,8 +252,8 @@ behave as expected.
 | Profile | Use | Selected work | Expected duration and hard wall |
 |---|---|---|---|
 | `smoke` | Installation and plumbing | Direct protocol checks, two targeted BenchLocal cases, one short Infermark request, one small Hermes repository task | About 10–20 minutes; 30-minute wall |
-| `standard` | Normal deployment qualification | Spark challenge cohort with three repeats, BenchLocal quick with three repeats, concurrency-1 Infermark, smoke plus scored multi-file Hermes acceptance | About 3–5 hours on the baseline GX10; five-hour wall |
-| `overnight` | Finalist stability | Spark full cohort, larger BenchLocal work, Infermark concurrency sweep, standard Hermes work plus ArchiveGuard | About 8–12 hours on the baseline GX10; 12-hour wall |
+| `standard` | Current comparable deployment qualification | SparkBench v6.8.0 full uncapped (76 scenarios, two repeats, temperature 0.3, thinking off, no request timeout), optional separate tier2 performance sweep, BenchLocal quick, Infermark, and two Hermes tasks | About 8–12 hours on the baseline GX10; 12-hour wall |
+| `overnight` | Finalist stability | The same v6.8 full uncapped suite with three repeats, optional tier2 sweep, larger BenchLocal/Infermark work, and ArchiveGuard | About 12–18 hours on the baseline GX10; 18-hour wall |
 
 Each subprocess also has an inactivity deadline. Progress artifacts and trusted
 heartbeats reset inactivity, but never extend the profile's total wall.
@@ -255,8 +270,9 @@ The five major stages are:
    external checkout.
 3. **BenchLocal** — deterministic instruction and tool-call packs sent directly
    to the endpoint, including reasoning-contamination checks.
-4. **Infermark** — direct endpoint latency, time to first token, inter-token
-   latency, errors, request throughput, and output-token throughput.
+4. **Infermark** — direct endpoint latency, time to first visible content
+   chunk, visible-content inter-chunk latency, errors, request throughput, and
+   end-to-end visible output-chunk throughput.
 5. **Hermes** — repository tasks through the frozen Hermes Agent runtime,
    networkless candidate workspace, and independent evaluator boundary.
 
@@ -287,7 +303,9 @@ reported as `QUARANTINED / NOT_ASSESSED` while retaining technical
 
 `INFRA_ERROR` and incomplete runs are never model failures and must not be
 ranked as such. A legitimate `NOT_QUALIFIED` result should be accepted rather
-than tuned away by changing thresholds or profiles.
+than tuned away by changing thresholds or profiles. Batch orchestration should
+continue from exit status 1 when a later profile is requested, and stop or skip
+only on exit status 2 (or an operator interruption).
 
 ## Results and artifacts
 
@@ -336,15 +354,16 @@ public decision tables. Each row prominently retains its resolved effective
 reasoning policy. Explicit controlled-policy runs remain visible diagnostics
 and never silently replace the primary ranking.
 
-The current `gx10-qualification-v4` profile routes every inference request
-through a trusted loopback gateway. It applies the one effective policy,
+The current `gx10-qualification-v5` profile routes every inference request
+through a trusted loopback gateway. It applies the effective runtime policy,
 removes conflicting legacy fields, and observes JSON/SSE response-field
-presence without retaining prompt or response content. For `off`, both adapters
-serialize `reasoning_effort: none` on `/v1/chat/completions`; the Ollama adapter
-also serializes `think: false` on native `/api/chat`. `native` omits a forcing
-field, and `effort:<level>` serializes the exact curated level. V2 and v3
-results remain unchanged historical cohorts; v2 thinking-control results
-remain explicitly labeled
+presence without retaining prompt or response content. Qwen vLLM serializes
+`chat_template_kwargs.enable_thinking=false` for `off` and omits that forcing
+field for `native`; Ollama and DS4 retain their existing runtime-specific
+controls. A configured Qwen deployment may honor explicit methodology request
+controls, while an explicit whole-run `--reasoning-policy off` remains
+authoritative. V2 through v4 results remain unchanged historical cohorts; v2
+thinking-control results remain explicitly labeled
 `LEGACY_THINKING_CONTROL_MISMATCH`.
 
 Every completed benchmark command performs this same finalization after its
@@ -360,6 +379,47 @@ tie-breaking; completed `NOT_QUALIFIED` trials remain separate, and repeated
 runs are never averaged or discarded. Smoke scores are never compared with
 standard scores.
 
+Generation v5 pins SparkBench commit
+`125ba161d9a91b705ff0cbb22471ac2914d9dea8` under methodology
+`v6.8.0-full-uncapped`. Standard uses tier `all` (76 scenarios), two repeats,
+temperature `0.3`, thinking `off`, uncapped responses, and request timeout `0`
+(none). Quality explicitly skips the automatic sweep. The harness invokes
+tier2 separately with a positive request timeout, so an unavailable or partial
+optional measurement cannot invalidate a valid quality result.
+
+SparkBench tier2 **Generation tok/s** is native completion-token usage divided
+by streaming decode time after the first reasoning, content, or tool-call
+token. The representative summary is the valid single-stream row with the
+shortest measured prompt context; every context and concurrency row is retained.
+Tier2 also records prefill tok/s (prompt tokens divided by TTFT) and TTFT. A
+failed measurement is null with explicit error evidence, never zero.
+
+Pinned Infermark streaming mode increments its legacy `tokens_per_second` counter once
+per non-empty OpenAI `delta.content` event and divides by the entire concurrency
+level's wall duration. It does not tokenize text, request streaming usage, or
+count `delta.reasoning_content`, so that field is reported as **E2E visible
+chunk/s**, not generation token/s. Its TTFT is correspondingly time to first
+visible content chunk (TTFC), and its ITL samples are intervals between later
+visible content chunks.
+
+The **Generation speed** column prefers the representative SparkBench tier2
+decode measurement when present. Pinned streaming Infermark does not provide
+true token/s, so results without valid tier2 data show an explicitly
+approximate visible stream cadence in `est. chunks/s`, calculated as `1 / mean
+ITL`. This is the available metric
+closest to perceived visible text cadence, but it is not tokenizer decode
+speed and, for reasoning models, excludes the preceding reasoning-content
+stream. Raw TTFT and ITL distributions and the legacy field remain in the run
+result. Infermark cannot provide prefill throughput; SparkBench tier2 can,
+using server-reported prompt-token count and separately observed TTFT.
+
+V4 and v5 are distinct public cohorts. V4 rows—including the preserved Qwen
+native-thinking/MTP2 result—remain visible as `HISTORICAL_COHORT` diagnostics
+and are never ranked against v5. The current Qwen quality alias records
+thinking off and MTP off while retaining the same immutable checkpoint/runtime
+provenance digest. Reproductions performed outside this harness may inform
+operator investigation, but are never imported as official leaderboard rows.
+
 Generated public files are not automatically committed or pushed. The owner
 must inspect the sanitized diff before publishing an update. Third-party
 submissions must not be mixed into the official GX10 baseline without
@@ -369,12 +429,12 @@ scoring version, upstream pins, and runtime/hardware metadata.
 ## Security and isolation
 
 - Candidate commands run in a Bubblewrap namespace with no network, a fixed
-  environment, a disposable writable candidate tree, and no runtime view of
-  evaluator tests, the benchmark control plane, Hermes home, SSH/Codex data,
-  sibling workspaces, or runtime evidence.
+  environment, a disposable writable candidate tree, and no view of private
+  tests, the benchmark control plane, Hermes home, SSH/Codex data, sibling
+  workspaces, or runtime evidence.
 - Evaluators run in a separate networkless namespace with a read-only candidate
-  mount and harness-owned test inputs. Candidates cannot read evaluator files
-  or forge the evaluator result channel during benchmark execution.
+  mount and harness-owned test inputs. Candidates cannot read hidden tests or
+  forge the evaluator result channel.
 - Hermes receives a disposable configuration with one trusted local endpoint,
   no fallback provider, and a fail-closed socket policy. OpenRouter, Nous, and
   other auxiliary-provider attempts are hard failures.
@@ -444,7 +504,8 @@ generated public diff before publication.
 ## Reproduction and attribution
 
 Exact upstream URLs, commits, versions, entrypoints, license-file hashes, and
-output contracts are frozen in `upstreams.lock.json`. `THIRD_PARTY.md` records
+output contracts are frozen generation-by-generation in `upstreams.lock.json`
+(v4) and `upstreams-v5.lock.json` (v5). `THIRD_PARTY.md` records
 how each repository is used and which code is, or is not, incorporated. A pin
 update requires a fresh license and adapter audit and normally creates a new
 comparison group or qualification generation.
@@ -458,11 +519,3 @@ reproduction compatibility.
 LLM Model Benchmarks is available under Apache-2.0. External
 projects retain their own licenses and terms; see `LICENSE` and
 `THIRD_PARTY.md`.
-
-## Maintenance
-
-Integrated upstream tools are pinned to exact commits and invoked from ignored
-external checkouts. Before changing a pin, audit its license, invocation and
-output contracts, runtime dependencies, and methodology compatibility. A pin
-change is not routine maintenance and may require a new comparison cohort or
-benchmark generation.

@@ -1,0 +1,12 @@
+run_id,timestamp,tier,model,label,endpoint,topology,parallelism,context,batch,spec_decode,workload,metric,value,unit,notes
+tier2-good,2026-09-01T00:00:00,tier2,qwen38-q8-262k:latest,test,http://127.0.0.1:1/v1,unknown,1,1016,,na,single_stream,ttft_ms,900.0,ms,
+tier2-good,2026-09-01T00:00:00,tier2,qwen38-q8-262k:latest,test,http://127.0.0.1:1/v1,unknown,1,1016,,na,single_stream,decode_tps,16.25,tok/s,
+tier2-good,2026-09-01T00:00:00,tier2,qwen38-q8-262k:latest,test,http://127.0.0.1:1/v1,unknown,1,1016,,na,single_stream,tpot_ms,61.5,ms,
+tier2-good,2026-09-01T00:00:00,tier2,qwen38-q8-262k:latest,test,http://127.0.0.1:1/v1,unknown,1,1016,,na,single_stream,prefill_tps,1128.0,tok/s,prompt=1016tok
+tier2-good,2026-09-01T00:00:00,tier2,qwen38-q8-262k:latest,test,http://127.0.0.1:1/v1,unknown,1,1016,,na,single_stream,output_tokens,512,tok,
+tier2-good,2026-09-01T00:00:00,tier2,qwen38-q8-262k:latest,test,http://127.0.0.1:1/v1,unknown,1,8120,,na,single_stream,error,<urlopen error [Errno 115] Operation now in progress>,,
+tier2-good,2026-09-01T00:00:00,tier2,qwen38-q8-262k:latest,test,http://127.0.0.1:1/v1,unknown,1,,1,na,concurrency,agg_decode_tps,16.1,tok/s,
+tier2-good,2026-09-01T00:00:00,tier2,qwen38-q8-262k:latest,test,http://127.0.0.1:1/v1,unknown,1,,1,na,concurrency,per_stream_tps,16.25,tok/s,
+tier2-good,2026-09-01T00:00:00,tier2,qwen38-q8-262k:latest,test,http://127.0.0.1:1/v1,unknown,1,,1,na,concurrency,ttft_p50_ms,900.0,ms,
+tier2-good,2026-09-01T00:00:00,tier2,qwen38-q8-262k:latest,test,http://127.0.0.1:1/v1,unknown,1,,1,na,concurrency,ttft_p99_ms,900.0,ms,
+tier2-good,2026-09-01T00:00:00,tier2,qwen38-q8-262k:latest,test,http://127.0.0.1:1/v1,unknown,1,,4,na,concurrency,error,no completed requests,,

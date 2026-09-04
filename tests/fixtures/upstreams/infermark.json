@@ -2,7 +2,7 @@
   "url": "http://127.0.0.1:11434/v1",
   "model": "qwen38-q8-262k:latest",
   "timestamp": "2026-08-26T00:00:00Z",
-  "config": {"n_requests": 2, "concurrency_levels": [1]},
+  "config": {"n_requests": 2, "concurrency_levels": [1], "mode": "streaming"},
   "results": [
     {
       "concurrency": 1,

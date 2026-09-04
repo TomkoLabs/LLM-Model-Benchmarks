@@ -57,11 +57,11 @@ if [ -e {shlex.quote(str(ROOT / 'README.md'))} ]; then
 fi
 echo "benchmark_root_hidden=YES"
 
-if [ -e {shlex.quote(str(ROOT / 'tasks/security/archiveguard-v1/private_tests/hidden_acceptance.py'))} ]; then
-    echo "evaluator_tests_hidden=NO"
+if [ -e {shlex.quote(str(ROOT / 'legacy/archiveguard-20260806/FINAL_MODEL_DECISION.md'))} ]; then
+    echo "legacy_answers_hidden=NO"
     exit 21
 fi
-echo "evaluator_tests_hidden=YES"
+echo "legacy_answers_hidden=YES"
 
 test -d "$HERMES_BENCH_CANDIDATE"
 test "$(find {shlex.quote(str(WORK))} -mindepth 1 -maxdepth 1 | wc -l)" -eq 1
@@ -118,7 +118,7 @@ else:
 
 expected = {
     "benchmark_root_hidden=YES",
-    "evaluator_tests_hidden=YES",
+    "legacy_answers_hidden=YES",
     "other_workspaces_hidden=YES",
     "candidate_visible=YES",
     "candidate_writable=YES",

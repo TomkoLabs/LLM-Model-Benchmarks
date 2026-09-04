@@ -28,16 +28,19 @@
     "model": {
       "type": "object",
       "properties": {
-        "runtime": {"enum": ["ollama", "ds4"]},
+        "runtime": {"enum": ["ollama", "ds4", "vllm"]},
         "runtime_digest": {
           "type": "string",
           "pattern": "^sha256:[0-9a-f]{64}$"
         },
         "runtime_version": {"type": "string", "minLength": 1},
+        "runtime_digest_kind": {"type": ["string", "null"]},
         "context_length": {"type": "integer", "minimum": 1},
         "endpoint_api_mode": {"type": ["string", "null"]},
         "capabilities": {"type": ["object", "null"]},
         "deployment_artifacts": {"type": ["object", "null"]},
+        "serving_configuration": {"type": ["object", "null"]},
+        "reasoning_control_profile": {"type": ["string", "null"]},
         "reasoning_policy": {
           "enum": ["off", "native", "effort:low", "effort:medium", "effort:high"]
         },
@@ -76,7 +79,8 @@
             "contract": {
               "enum": [
                 "ollama-reasoning-policy-v1",
-                "openai-reasoning-policy-v1"
+                "openai-reasoning-policy-v1",
+                "vllm-chat-template-reasoning-policy-v1"
               ]
             },
             "requested": {
@@ -136,7 +140,9 @@
         "properties": {
           "provenance": {
             "properties": {
-              "qualification_generation": {"const": "gx10-qualification-v4"}
+              "qualification_generation": {
+                "enum": ["gx10-qualification-v4", "gx10-qualification-v5"]
+              }
             },
             "required": ["qualification_generation"]
           }
@@ -198,6 +204,116 @@
                     "pattern": "^sha256:[0-9a-f]{64}$"
                   },
                   "dspark_enabled": {"const": true}
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "model": {
+            "properties": {"runtime": {"const": "vllm"}},
+            "required": ["runtime"]
+          }
+        },
+        "required": ["model"]
+      },
+      "then": {
+        "properties": {
+          "model": {
+            "required": [
+              "runtime_digest",
+              "runtime_digest_kind",
+              "runtime_version",
+              "context_length",
+              "endpoint_api_mode",
+              "capabilities",
+              "deployment_artifacts",
+              "serving_configuration",
+              "reasoning_control_profile"
+            ],
+            "properties": {
+              "runtime_digest_kind": {
+                "const": "vllm-deployment-provenance"
+              },
+              "endpoint_api_mode": {"const": "openai-chat-completions"},
+              "reasoning_control_profile": {
+                "const": "qwen-enable-thinking-v1"
+              },
+              "capabilities": {
+                "type": "object",
+                "required": ["streaming", "tool_calls"],
+                "properties": {
+                  "streaming": {"const": true},
+                  "tool_calls": {"const": true}
+                },
+                "additionalProperties": true
+              },
+              "deployment_artifacts": {
+                "type": "object",
+                "required": [
+                  "provenance_contract",
+                  "checkpoint",
+                  "checkpoint_revision",
+                  "serving_implementation",
+                  "serving_revision"
+                ],
+                "properties": {
+                  "provenance_contract": {
+                    "const": "vllm-deployment-provenance-v1"
+                  },
+                  "checkpoint": {"type": "string", "minLength": 1},
+                  "checkpoint_revision": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{40}$"
+                  },
+                  "serving_implementation": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "serving_revision": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{7,40}$"
+                  },
+                  "serving_revision_full": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{40}$"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "serving_configuration": {
+                "type": "object",
+                "required": [
+                  "gpu_memory_utilization",
+                  "max_num_seqs",
+                  "mtp_speculative_tokens",
+                  "prefix_caching",
+                  "exact_topk",
+                  "prewarm"
+                ],
+                "properties": {
+                  "gpu_memory_utilization": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1
+                  },
+                  "max_num_seqs": {"type": "integer", "minimum": 1},
+                  "mtp_speculative_tokens": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "prefix_caching": {"type": "boolean"},
+                  "exact_topk": {"type": "boolean"},
+                  "prewarm": {"type": "boolean"},
+                  "kv_cache_dtype": {
+                    "type": "string",
+                    "minLength": 1
+                  }
                 },
                 "additionalProperties": false
               }

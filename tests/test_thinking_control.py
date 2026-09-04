@@ -10,8 +10,10 @@ from pathlib import Path
 
 from harness.model_gateway import ModelGateway, read_model_transport_observations
 from harness.reasoning_policy import (
+    QWEN_ENABLE_THINKING_PROFILE,
     ReasoningPolicyError,
     classify_direct_response,
+    normalize_model_request,
     normalize_ollama_request,
     ollama_reasoning_control,
     parse_reasoning_policy,
@@ -141,10 +143,19 @@ class ReasoningPolicyTests(unittest.TestCase):
         off = parse_reasoning_policy("off")
         native = parse_reasoning_policy("native")
         effort = parse_reasoning_policy("effort:low")
+        high_effort = parse_reasoning_policy("effort:high")
         self.assertEqual(ollama_reasoning_control("openai-chat-completions", off), {"reasoning_effort": "none"})
         self.assertEqual(ollama_reasoning_control("ollama-native-chat", off), {"think": False})
         self.assertEqual(ollama_reasoning_control("openai-chat-completions", native), {})
         self.assertEqual(ollama_reasoning_control("ollama-native-chat", effort), {"think": "low"})
+        self.assertEqual(
+            ollama_reasoning_control("openai-chat-completions", high_effort),
+            {"reasoning_effort": "high"},
+        )
+        self.assertEqual(
+            ollama_reasoning_control("ollama-native-chat", high_effort),
+            {"think": "high"},
+        )
         payload, metadata = normalize_ollama_request(
             "openai-chat-completions",
             {
@@ -163,6 +174,117 @@ class ReasoningPolicyTests(unittest.TestCase):
         self.assertEqual(payload["options"], {"temperature": 0})
         self.assertNotIn("chat_template_kwargs", payload)
         self.assertIn("options.think", metadata["conflicting_fields_removed"])
+
+    def test_vllm_native_policy_honors_exact_request_level_switches(self) -> None:
+        native = parse_reasoning_policy("native")
+        enabled, enabled_metadata = normalize_model_request(
+            "vllm",
+            "openai-chat-completions",
+            {
+                "model": "fixture",
+                "chat_template_kwargs": {
+                    "enable_thinking": True,
+                    "custom": "preserved",
+                },
+            },
+            native,
+            QWEN_ENABLE_THINKING_PROFILE,
+        )
+        disabled, disabled_metadata = normalize_model_request(
+            "vllm",
+            "openai-chat-completions",
+            {
+                "model": "fixture",
+                "think": False,
+                "reasoning_effort": "none",
+                "chat_template_kwargs": {"enable_thinking": False},
+            },
+            native,
+            QWEN_ENABLE_THINKING_PROFILE,
+        )
+
+        self.assertEqual(
+            enabled["chat_template_kwargs"],
+            {"custom": "preserved"},
+        )
+        self.assertEqual(
+            enabled_metadata["requested_reasoning_policy"], "native"
+        )
+        self.assertEqual(
+            enabled_metadata["request_reasoning_policy_source"],
+            "request-control",
+        )
+        self.assertEqual(
+            disabled["chat_template_kwargs"],
+            {"enable_thinking": False},
+        )
+        self.assertNotIn("think", disabled)
+        self.assertNotIn("reasoning_effort", disabled)
+        self.assertEqual(
+            disabled_metadata["requested_reasoning_policy"], "off"
+        )
+        self.assertEqual(
+            disabled_metadata["deployment_reasoning_policy"], "native"
+        )
+
+    def test_vllm_whole_run_off_overrides_request_on_and_conflicts_fail(self) -> None:
+        disabled, metadata = normalize_model_request(
+            "vllm",
+            "openai-chat-completions",
+            {"model": "fixture", "enable_thinking": True, "think": True},
+            parse_reasoning_policy("off"),
+            QWEN_ENABLE_THINKING_PROFILE,
+        )
+        self.assertEqual(
+            disabled["chat_template_kwargs"],
+            {"enable_thinking": False},
+        )
+        self.assertNotIn("enable_thinking", disabled)
+        self.assertNotIn("think", disabled)
+        self.assertEqual(metadata["requested_reasoning_policy"], "off")
+        self.assertEqual(
+            metadata["request_reasoning_policy_source"], "deployment-policy"
+        )
+
+        configured_default, configured_metadata = normalize_model_request(
+            "vllm",
+            "openai-chat-completions",
+            {"model": "fixture", "chat_template_kwargs": {"enable_thinking": True}},
+            parse_reasoning_policy("off"),
+            QWEN_ENABLE_THINKING_PROFILE,
+            honor_request_reasoning_controls=True,
+        )
+        self.assertNotIn("chat_template_kwargs", configured_default)
+        self.assertEqual(
+            configured_metadata["requested_reasoning_policy"], "native"
+        )
+        self.assertEqual(
+            configured_metadata["request_reasoning_policy_source"],
+            "request-control",
+        )
+        self.assertTrue(
+            configured_metadata["honor_request_reasoning_controls"]
+        )
+
+        with self.assertRaisesRegex(ReasoningPolicyError, "conflicting"):
+            normalize_model_request(
+                "vllm",
+                "openai-chat-completions",
+                {
+                    "enable_thinking": True,
+                    "chat_template_kwargs": {"enable_thinking": False},
+                },
+                parse_reasoning_policy("native"),
+                QWEN_ENABLE_THINKING_PROFILE,
+            )
+        with self.assertRaisesRegex(ReasoningPolicyError, "unsupported effort"):
+            normalize_model_request(
+                "vllm",
+                "openai-chat-completions",
+                {"reasoning_effort": "medium"},
+                parse_reasoning_policy("native"),
+                QWEN_ENABLE_THINKING_PROFILE,
+            )
 
     def test_empty_and_off_contamination_remain_model_failures(self) -> None:
         empty = classify_direct_response(_response(), expected_content="wanted")

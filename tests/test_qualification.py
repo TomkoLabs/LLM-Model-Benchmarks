@@ -15,6 +15,10 @@ from harness.comparison import ComparisonError
 from harness.evaluator import evaluate_task
 from harness.hermes_runner import detect_fallback_attempts
 from harness.hermes_diagnostics import assess
+from harness.infermark_metrics import (
+    NON_STREAMING_TPS_SEMANTICS,
+    STREAMING_TPS_SEMANTICS,
+)
 from harness.processes import ProcessDeadlineExpired, run_process_group
 from harness.reasoning_policy import parse_reasoning_policy
 from harness.upstreams import (
@@ -22,9 +26,11 @@ from harness.upstreams import (
     build_benchlocal_command,
     build_infermark_command,
     build_spark_command,
+    build_spark_throughput_command,
     parse_benchlocal,
     parse_infermark,
     parse_spark,
+    parse_spark_throughput,
     safe_slug,
     validate_spark_runtime_lock,
     write_chromium_network_wrapper,
@@ -42,6 +48,28 @@ DIRECT_PROBE = {
 
 
 class UpstreamAdapterTests(unittest.TestCase):
+    def test_mixed_request_policies_match_native_deployment_observer(self) -> None:
+        observation = {
+            "observer_ok": True,
+            "request_count": 2,
+            "response_count": 2,
+            "deployment_reasoning_policy": "native",
+            "requested_reasoning_policy": None,
+            "requested_reasoning_policies": ["native", "off"],
+        }
+        self.assertTrue(
+            qualification._transport_observer_matches_deployment(
+                observation,
+                parse_reasoning_policy("native"),
+            )
+        )
+        self.assertFalse(
+            qualification._transport_observer_matches_deployment(
+                observation,
+                parse_reasoning_policy("off"),
+            )
+        )
+
     def test_offline_parser_fixtures(self) -> None:
         spark = parse_spark(FIXTURES / "spark-bench.csv", model=MODEL)
         benchlocal = parse_benchlocal(FIXTURES / "benchlocal.json", model=MODEL)
@@ -49,6 +77,69 @@ class UpstreamAdapterTests(unittest.TestCase):
         self.assertEqual(spark["metrics"]["coding_quality"], 75.0)
         self.assertEqual(benchlocal["score"], 100.0)
         self.assertEqual(infermark["metrics"]["tokens_per_second_c1"], 8.0)
+        with self.assertRaisesRegex(UpstreamError, "methodology mismatch"):
+            parse_spark(
+                FIXTURES / "spark-bench.csv",
+                model=MODEL,
+                expected_methodology="v6.8.0-full-uncapped",
+            )
+
+    def test_infermark_streaming_metrics_are_visible_chunks_not_tokens(self) -> None:
+        metrics = parse_infermark(
+            FIXTURES / "infermark.json", model=MODEL
+        )["metrics"]
+        self.assertEqual(metrics["infermark_measurement_mode"], "streaming")
+        self.assertEqual(
+            metrics["tokens_per_second_semantics"], STREAMING_TPS_SEMANTICS
+        )
+        self.assertEqual(metrics["visible_output_chunks_per_second_c1"], 8.0)
+        self.assertIsNone(metrics["generation_tokens_per_second_c1"])
+        self.assertEqual(
+            metrics["time_to_first_visible_chunk_seconds_c1"]["mean"], 0.8
+        )
+        self.assertEqual(
+            metrics["visible_output_inter_chunk_latency_seconds_c1"]["mean"],
+            0.12,
+        )
+        self.assertAlmostEqual(
+            metrics["estimated_visible_generation_chunks_per_second_c1"],
+            1 / 0.12,
+        )
+
+    def test_infermark_missing_itl_does_not_invent_generation_speed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "infermark.json"
+            value = json.loads(
+                (FIXTURES / "infermark.json").read_text(encoding="utf-8")
+            )
+            value["results"][0]["itl"] = None
+            path.write_text(json.dumps(value), encoding="utf-8")
+            metrics = parse_infermark(path, model=MODEL)["metrics"]
+        self.assertIsNone(
+            metrics["estimated_visible_generation_chunks_per_second_c1"]
+        )
+        self.assertIsNone(metrics["generation_tokens_per_second_c1"])
+
+    def test_infermark_non_streaming_throughput_remains_end_to_end(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "infermark.json"
+            value = json.loads(
+                (FIXTURES / "infermark.json").read_text(encoding="utf-8")
+            )
+            value["config"]["mode"] = "non_streaming"
+            value["results"][0]["ttft"] = None
+            value["results"][0]["itl"] = None
+            path.write_text(json.dumps(value), encoding="utf-8")
+            metrics = parse_infermark(path, model=MODEL)["metrics"]
+        self.assertEqual(
+            metrics["tokens_per_second_semantics"],
+            NON_STREAMING_TPS_SEMANTICS,
+        )
+        self.assertEqual(
+            metrics["end_to_end_output_tokens_per_second_c1"], 8.0
+        )
+        self.assertIsNone(metrics["generation_tokens_per_second_c1"])
+        self.assertNotIn("visible_output_chunks_per_second_c1", metrics)
 
     def test_benchlocal_thinking_contamination_is_a_failed_model_result(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -99,7 +190,9 @@ class UpstreamAdapterTests(unittest.TestCase):
         self.assertEqual(infer.count(hostile), 1)
 
     def test_spark_reasoning_policy_maps_to_upstream_cli(self) -> None:
-        profile = qualification.load_configuration()["profiles"]["standard"]["spark"]
+        profile = qualification.load_configuration(
+            "gx10-qualification-v4"
+        )["profiles"]["standard"]["spark"]
         command = build_spark_command(
             Path("/checkout"),
             endpoint="http://127.0.0.1:11434/v1",
@@ -114,14 +207,172 @@ class UpstreamAdapterTests(unittest.TestCase):
 
     def test_active_profiles_do_not_require_docker_only_packs(self) -> None:
         config = qualification.load_configuration()
-        self.assertEqual(config["generation"], "gx10-qualification-v4")
-        self.assertTrue(
-            all("thinking" not in profile for profile in config["profiles"].values())
-        )
+        self.assertEqual(config["generation"], "gx10-qualification-v5")
         for name in ("standard", "overnight"):
             selections = config["profiles"][name]["benchlocal"]
             self.assertTrue(selections)
             self.assertTrue(all(not row.get("sandboxed") for row in selections))
+
+    def test_v4_methodology_is_frozen_and_replayable(self) -> None:
+        config = qualification.load_configuration("gx10-qualification-v4")
+        spark = config["profiles"]["standard"]["spark"]
+        self.assertEqual(config["generation"], "gx10-qualification-v4")
+        self.assertEqual(
+            spark,
+            {
+                "tier": "challenge",
+                "repeats": 3,
+                "timeout": 900,
+                "skip_throughput": True,
+            },
+        )
+        _config_path, lock_path = qualification.qualification_sources(
+            "gx10-qualification-v4"
+        )
+        lock = qualification.load_upstream_lock(lock_path)
+        self.assertEqual(
+            lock["spark-bench"]["commit"],
+            "364e6ecf684988b024cdd9b1ae1feb0e44342603",
+        )
+
+    def test_v5_standard_is_exact_full_uncapped_methodology(self) -> None:
+        config = qualification.load_configuration("gx10-qualification-v5")
+        spark = config["profiles"]["standard"]["spark"]
+        self.assertIsNone(config["profiles"]["smoke"]["spark"])
+        self.assertEqual(spark["methodology"], "v6.8.0-full-uncapped")
+        command = build_spark_command(
+            Path("/checkout"),
+            endpoint="http://127.0.0.1:11434/v1",
+            model=MODEL,
+            output_dir=Path("/output"),
+            label="offline",
+            profile=spark,
+            reasoning_policy=parse_reasoning_policy("native"),
+        )
+        expected_pairs = {
+            "--tier": "all",
+            "--repeats": "2",
+            "--temperature": "0.3",
+            "--thinking": "off",
+            "--timeout": "0",
+        }
+        for option, expected in expected_pairs.items():
+            self.assertEqual(command[command.index(option) + 1], expected)
+        self.assertIn("--uncapped", command)
+        self.assertIn("--skip-throughput", command)
+        _config_path, lock_path = qualification.qualification_sources(
+            "gx10-qualification-v5"
+        )
+        lock = qualification.load_upstream_lock(lock_path)
+        self.assertEqual(
+            lock["spark-bench"]["commit"],
+            "125ba161d9a91b705ff0cbb22471ac2914d9dea8",
+        )
+        throughput = build_spark_throughput_command(
+            Path("/checkout"),
+            endpoint="http://127.0.0.1:11434/v1",
+            model=MODEL,
+            output_dir=Path("/throughput"),
+            label="offline-throughput",
+            profile=spark["throughput"],
+        )
+        self.assertEqual(throughput[throughput.index("--timeout") + 1], "900")
+
+    def test_spark_tier2_parses_actual_generation_and_null_failures(self) -> None:
+        parsed = parse_spark_throughput(
+            FIXTURES / "spark-bench-tier2.csv",
+            model=MODEL,
+            raw_dump_path=FIXTURES / "spark-bench-tier2-raw.json",
+        )
+        self.assertEqual(parsed["status"], "PARTIAL")
+        representative = parsed["representative_single_stream"]
+        self.assertEqual(representative["context_tokens"], 1016)
+        self.assertEqual(
+            representative["generation_tokens_per_second"], 16.25
+        )
+        self.assertEqual(representative["prefill_tokens_per_second"], 1128.0)
+        self.assertEqual(representative["time_to_first_token_seconds"], 0.9)
+        self.assertEqual(
+            representative["token_count_source"], "native_stream_usage"
+        )
+        self.assertEqual(
+            parsed["concurrency"]["1"]["token_count_source"],
+            "native_stream_usage",
+        )
+        self.assertIsNone(
+            parsed["contexts"]["8120"]["generation_tokens_per_second"]
+        )
+        self.assertEqual(parsed["errors"][0]["context_tokens"], 8120)
+
+    def test_spark_tier2_rejects_non_native_token_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            raw_dump = Path(temporary) / "raw_dump.jsonl"
+            raw_dump.write_text(
+                json.dumps({"usage": {"prompt_tokens": 1016}}) + "\n",
+                encoding="utf-8",
+            )
+            parsed = parse_spark_throughput(
+                FIXTURES / "spark-bench-tier2.csv",
+                model=MODEL,
+                raw_dump_path=raw_dump,
+            )
+
+        self.assertEqual(parsed["status"], "UNAVAILABLE")
+        self.assertIsNone(parsed["representative_single_stream"])
+        self.assertIsNone(
+            parsed["contexts"]["1016"]["generation_tokens_per_second"]
+        )
+        self.assertIsNone(
+            parsed["concurrency"]["1"][
+                "aggregate_generation_tokens_per_second"
+            ]
+        )
+        self.assertGreaterEqual(len(parsed["errors"]), 3)
+
+    def test_optional_throughput_unavailable_preserves_quality(self) -> None:
+        quality = {
+            "status": "PASS",
+            "score": 90.9,
+            "metrics": {"truescore": 90.9, "coding_quality": 92.6},
+        }
+        qualification.attach_optional_spark_throughput(
+            quality,
+            {
+                "status": "UNAVAILABLE",
+                "representative_single_stream": None,
+                "errors": [{"error": "no completed requests"}],
+            },
+        )
+        self.assertEqual(quality["status"], "PASS")
+        self.assertEqual(quality["score"], 90.9)
+        self.assertIsNone(
+            quality["metrics"]["serving_performance"][
+                "representative_single_stream"
+            ]
+        )
+
+    def test_qwen_quality_deployment_is_distinct_from_historical_alias(self) -> None:
+        models = benchmark_model.load_models()
+        historical = models["qwen38-flash-next-nvfp4-262k"]
+        quality = models["qwen38-flash-next-nvfp4-262k-quality"]
+        self.assertEqual(historical["runtime_digest"], quality["runtime_digest"])
+        self.assertEqual(
+            historical["deployment_artifacts"], quality["deployment_artifacts"]
+        )
+        self.assertEqual(historical["reasoning_policy"], "native")
+        self.assertEqual(
+            historical["serving_configuration"]["mtp_speculative_tokens"], 2
+        )
+        self.assertEqual(quality["reasoning_policy"], "off")
+        self.assertEqual(
+            quality["serving_configuration"]["mtp_speculative_tokens"], 0
+        )
+        self.assertFalse(historical["default_for_runtime"])
+        self.assertTrue(quality["default_for_runtime"])
+        self.assertEqual(
+            qualification.resolve_endpoint(None, "qwen3.8-flash-next").port,
+            18300,
+        )
 
     def test_spark_render_browser_is_constrained_to_loopback(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -263,6 +514,19 @@ class QualificationDecisionTests(unittest.TestCase):
         self.assertEqual(scores["components"]["coding"], 72.5)
         self.assertEqual(scores["components"]["tool_instruction"], 80.0)
         self.assertEqual(scores["executed_weight"], 100)
+
+    def test_qwen_historical_performance_score_is_unchanged(self) -> None:
+        component = {
+            "metrics": {
+                "errors": 0,
+                "tokens_per_second_c1": 0.8590606920916226,
+                "ttft_seconds_c1": {"p50": 4.523100332007743},
+                "estimated_visible_generation_chunks_per_second_c1": (
+                    12.427848743748696
+                ),
+            }
+        }
+        self.assertEqual(qualification._performance_score(component), 36.68)
 
     def test_valid_execution_without_trajectory_or_text_final_can_pass(self) -> None:
         components = self._components()
@@ -1049,6 +1313,8 @@ class PublicConfigurationTests(unittest.TestCase):
                 "gemma4:31b-it-bf16": "native",
                 "ornith15-q8:latest": "off",
                 "deepseek-v4-flash": "off",
+                "qwen38-flash-next-nvfp4-262k": "native",
+                "qwen38-flash-next-nvfp4-262k-quality": "off",
             },
         )
         for alias, model in benchmark_model.load_models().items():

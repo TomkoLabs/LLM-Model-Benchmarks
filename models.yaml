@@ -296,3 +296,99 @@ models:
     notes:
       - DS4 exposes only /v1/models and /v1/chat/completions to the harness.
       - Thinking-disabled control serializes as reasoning_effort=none.
+
+  qwen38-flash-next-nvfp4-262k:
+    display_name: Qwen3.8-Flash-Next — 125B main + 51B PLE / 6B active — NVFP4 — 262144-token context
+    provider: gx10
+    runtime: vllm
+    runtime_version: blazux/qwen3.8-Flash-DGX@209646c
+    runtime_model: qwen3.8-flash-next
+    runtime_digest: sha256:56d617b9008714d82b491a73c3fc8f86501a2a4dcd17f0b883359762f1af3e17
+    runtime_digest_kind: vllm-deployment-provenance
+    canonical_name: Qwen3.8-Flash-Next
+    source_model: RadixArk/Qwen3.8-Flash-Next-NVFP4
+    source_version: Flash-Next
+    architecture: Qwen3.8-Flash-Next sparse MoE
+    parameter_variant: 125B main + 51B PLE / 6B active
+    quantization: NVFP4
+    context_length: 262144
+    native_context_length: 262144
+    reasoning_effort: native
+    reasoning_policy: native
+    supported_reasoning_policies: ["off", native]
+    reasoning_control_profile: qwen-enable-thinking-v1
+    endpoint_port: 18300
+    api_mode: openai-chat-completions
+    capabilities:
+      streaming: true
+      tool_calls: true
+    serving_configuration:
+      gpu_memory_utilization: 0.75
+      max_num_seqs: 2
+      mtp_speculative_tokens: 2
+      prefix_caching: true
+      exact_topk: true
+      prewarm: false
+    deployment_artifacts:
+      provenance_contract: vllm-deployment-provenance-v1
+      checkpoint: RadixArk/Qwen3.8-Flash-Next-NVFP4
+      checkpoint_revision: 7b719225242aacd3dbd3f9407468c2ee9a9d2594
+      serving_implementation: blazux/qwen3.8-Flash-DGX
+      serving_revision: 209646c
+      serving_revision_full: 209646cd98290035ccbddef29b14c460460a8709
+    role: curated-runtime-profile
+    default_for_runtime: false
+    notes:
+      - vLLM exposes only /v1/models and /v1/chat/completions to the harness.
+      - runtime_digest is the SHA-256 of the versioned immutable deployment-provenance descriptor, not a weight-file checksum.
+      - serving_configuration records the live deployment settings but is intentionally excluded from the immutable provenance digest.
+      - Native reasoning uses the checkpoint template default; off uses chat_template_kwargs.enable_thinking=false.
+      - Historical native-thinking deployment with MTP/speculative decoding set to 2; retained for exact attribution of v4 results.
+
+  qwen38-flash-next-nvfp4-262k-quality:
+    display_name: Qwen3.8-Flash-Next — quality deployment (thinking off, MTP off) — NVFP4 — 262144-token context
+    provider: gx10
+    runtime: vllm
+    runtime_version: blazux/qwen3.8-Flash-DGX@209646c
+    runtime_model: qwen3.8-flash-next
+    runtime_digest: sha256:56d617b9008714d82b491a73c3fc8f86501a2a4dcd17f0b883359762f1af3e17
+    runtime_digest_kind: vllm-deployment-provenance
+    canonical_name: Qwen3.8-Flash-Next
+    source_model: RadixArk/Qwen3.8-Flash-Next-NVFP4
+    source_version: Flash-Next
+    architecture: Qwen3.8-Flash-Next sparse MoE
+    parameter_variant: 125B main + 51B PLE / 6B active
+    quantization: NVFP4
+    context_length: 262144
+    native_context_length: 262144
+    reasoning_effort: none
+    reasoning_policy: "off"
+    supported_reasoning_policies: ["off", native]
+    reasoning_control_profile: qwen-enable-thinking-v1
+    endpoint_port: 18300
+    api_mode: openai-chat-completions
+    capabilities:
+      streaming: true
+      tool_calls: true
+    serving_configuration:
+      gpu_memory_utilization: 0.75
+      max_num_seqs: 2
+      mtp_speculative_tokens: 0
+      prefix_caching: true
+      exact_topk: true
+      prewarm: false
+      kv_cache_dtype: BF16/default
+    deployment_artifacts:
+      provenance_contract: vllm-deployment-provenance-v1
+      checkpoint: RadixArk/Qwen3.8-Flash-Next-NVFP4
+      checkpoint_revision: 7b719225242aacd3dbd3f9407468c2ee9a9d2594
+      serving_implementation: blazux/qwen3.8-Flash-DGX
+      serving_revision: 209646c
+      serving_revision_full: 209646cd98290035ccbddef29b14c460460a8709
+    role: curated-runtime-profile
+    default_for_runtime: true
+    notes:
+      - Current quality-oriented deployment identity for gx10-qualification-v5.
+      - The immutable provenance digest is shared with the historical alias because checkpoint, quantization, runtime model ID, and serving implementation revision are unchanged.
+      - Mutable deployment provenance separately records thinking off and MTP/speculative decoding off.
+      - Thinking off serializes as chat_template_kwargs.enable_thinking=false through the vLLM/Qwen reasoning adapter.

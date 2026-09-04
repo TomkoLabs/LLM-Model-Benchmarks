@@ -162,3 +162,17 @@ models:
     aliases:
       - deepseek-v4-flash
     metadata_source: Operator-provided DS4 v0.6.5 base GGUF checksum and deployment metadata, recorded 2026-08-28
+
+  sha256:56d617b9008714d82b491a73c3fc8f86501a2a4dcd17f0b883359762f1af3e17:
+    canonical_name: Qwen3.8-Flash-Next
+    source_model: RadixArk/Qwen3.8-Flash-Next-NVFP4
+    source_url: https://huggingface.co/RadixArk/Qwen3.8-Flash-Next-NVFP4
+    version: Flash-Next
+    parameter_variant: 125B main + 51B PLE / 6B active
+    architecture: Qwen3.8-Flash-Next sparse MoE
+    quantization: NVFP4
+    source_filename: null
+    aliases:
+      - qwen3.8-flash-next
+      - qwen38-flash-next-nvfp4-262k
+    metadata_source: Operator-provided checkpoint revision and blazux serving revision; deployment provenance recorded 2026-08-31

@@ -12,6 +12,10 @@ from typing import Any, Mapping, Sequence
 
 from harness.artifacts import atomic_write_text, ensure_subdirectory
 from harness.endpoints import LocalEndpoint
+from harness.infermark_metrics import (
+    non_streaming_metric_aliases,
+    streaming_metric_aliases,
+)
 from harness.processes import ProcessDeadlineExpired, run_process_group
 from harness.reasoning_policy import ReasoningPolicy, parse_reasoning_policy
 
@@ -222,8 +226,12 @@ def validate_spark_runtime_lock(entry: Mapping[str, Any]) -> None:
         )
 
 
-def ensure_checkouts(*, setup: bool = True) -> dict[str, dict[str, Any]]:
-    lock = load_upstream_lock()
+def ensure_checkouts(
+    *,
+    setup: bool = True,
+    lock_path: Path = LOCK_PATH,
+) -> dict[str, dict[str, Any]]:
+    lock = load_upstream_lock(lock_path)
     integrated = {
         name: entry
         for name, entry in lock.items()
@@ -292,6 +300,15 @@ def build_spark_command(
     reasoning_policy: ReasoningPolicy | None = None,
 ) -> list[str]:
     policy = reasoning_policy or parse_reasoning_policy("off")
+    thinking = profile.get("thinking")
+    if thinking is None:
+        thinking = (
+            "off"
+            if policy.mode == "off"
+            else "on"
+            if policy.mode == "effort"
+            else "auto"
+        )
     argv = [
         str(HERMES_PYTHON),
         str(checkout / "spark_bench.py"),
@@ -311,19 +328,53 @@ def build_spark_command(
         "--repeats",
         str(profile["repeats"]),
         "--thinking",
-        (
-            "off"
-            if policy.mode == "off"
-            else "on"
-            if policy.mode == "effort"
-            else "auto"
-        ),
+        str(thinking),
         "--timeout",
         str(profile.get("timeout", 900)),
     ]
+    if "temperature" in profile:
+        argv.extend(["--temperature", str(profile["temperature"])])
+    if profile.get("uncapped") is True:
+        argv.append("--uncapped")
     if profile.get("skip_throughput", True):
         argv.append("--skip-throughput")
     return argv
+
+
+def build_spark_throughput_command(
+    checkout: Path,
+    *,
+    endpoint: str,
+    model: str,
+    output_dir: Path,
+    label: str,
+    profile: Mapping[str, Any],
+) -> list[str]:
+    return [
+        str(HERMES_PYTHON),
+        str(checkout / "spark_bench.py"),
+        "tier2",
+        "--label",
+        label,
+        "--run-kind",
+        "benchmark",
+        "--endpoint",
+        endpoint,
+        "--model",
+        model,
+        "--out-dir",
+        str(output_dir),
+        "--contexts",
+        ",".join(str(value) for value in profile["contexts"]),
+        "--concurrency",
+        ",".join(str(value) for value in profile["concurrency"]),
+        "--conc-context",
+        str(profile["concurrency_context"]),
+        "--gen-tokens",
+        str(profile["generation_tokens"]),
+        "--timeout",
+        str(profile["timeout"]),
+    ]
 
 
 def build_benchlocal_command(
@@ -624,25 +675,36 @@ def parse_infermark(path: Path, *, model: str) -> dict[str, Any]:
     if total < 1 or success + errors != total:
         raise UpstreamError("Infermark request counts are inconsistent")
     single = next((row for row in rows if row["concurrency"] == 1), rows[0])
+    metrics = {
+        "requests": total,
+        "success": success,
+        "errors": errors,
+        "error_rate": round(errors / total, 6),
+        "concurrency": [row["concurrency"] for row in rows],
+        "tokens_per_second_c1": single["tokens_per_second"],
+        "requests_per_second_c1": single["requests_per_second"],
+        "latency_seconds_c1": single["latency"],
+        "ttft_seconds_c1": single["ttft"],
+        "itl_seconds_c1": single["itl"],
+    }
+    mode = value["config"].get("mode")
+    if mode == "streaming":
+        metrics.update(streaming_metric_aliases(metrics))
+    elif mode == "non_streaming":
+        metrics.update(non_streaming_metric_aliases(metrics))
     return {
         "status": "PASS" if errors == 0 else "FAIL",
         "score": round(100 * success / total, 3),
-        "metrics": {
-            "requests": total,
-            "success": success,
-            "errors": errors,
-            "error_rate": round(errors / total, 6),
-            "concurrency": [row["concurrency"] for row in rows],
-            "tokens_per_second_c1": single["tokens_per_second"],
-            "requests_per_second_c1": single["requests_per_second"],
-            "latency_seconds_c1": single["latency"],
-            "ttft_seconds_c1": single["ttft"],
-            "itl_seconds_c1": single["itl"],
-        },
+        "metrics": metrics,
     }
 
 
-def parse_spark(path: Path, *, model: str) -> dict[str, Any]:
+def parse_spark(
+    path: Path,
+    *,
+    model: str,
+    expected_methodology: str | None = None,
+) -> dict[str, Any]:
     try:
         with path.open(newline="", encoding="utf-8") as handle:
             rows = list(csv.DictReader(handle))
@@ -670,6 +732,12 @@ def parse_spark(path: Path, *, model: str) -> dict[str, Any]:
         raise UpstreamError("Spark Bench score rows are missing or malformed") from exc
     coding_value = metrics.get(("code", "domain_quality")) or metrics.get(("coding", "domain_quality"))
     coding = float(coding_value) if coding_value is not None else quality
+    methodology = metrics.get(("provenance", "methodology"))
+    if expected_methodology is not None and methodology != expected_methodology:
+        raise UpstreamError(
+            "Spark Bench methodology mismatch: expected "
+            f"{expected_methodology}, got {methodology}"
+        )
     quarantine = metrics.get(("provenance", "quarantine"))
     if quarantine != "clean":
         return {
@@ -685,7 +753,7 @@ def parse_spark(path: Path, *, model: str) -> dict[str, Any]:
                 "reliability": reliability,
                 "error_rate_percent": float(metrics.get(("provenance", "error_rate"), 0)),
                 "repeats": int(float(metrics.get(("provenance", "repeats"), 1))),
-                "methodology": metrics.get(("provenance", "methodology")),
+                "methodology": methodology,
                 "total_output_tokens": int(float(metrics.get(("overall", "total_output_tokens"), 0))),
             },
         }
@@ -700,7 +768,257 @@ def parse_spark(path: Path, *, model: str) -> dict[str, Any]:
             "reliability": reliability,
             "error_rate_percent": float(metrics.get(("provenance", "error_rate"), 0)),
             "repeats": int(float(metrics.get(("provenance", "repeats"), 1))),
-            "methodology": metrics.get(("provenance", "methodology")),
+            "methodology": methodology,
             "total_output_tokens": int(float(metrics.get(("overall", "total_output_tokens"), 0))),
         },
+    }
+
+
+def _positive_number(value: Any) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def parse_spark_throughput(
+    path: Path,
+    *,
+    model: str,
+    raw_dump_path: Path | None = None,
+) -> dict[str, Any]:
+    """Parse SparkBench tier2 data without converting failures into zeroes."""
+
+    try:
+        with path.open(newline="", encoding="utf-8") as handle:
+            rows = list(csv.DictReader(handle))
+    except OSError as exc:
+        raise UpstreamError(f"missing Spark Bench throughput CSV: {exc}") from exc
+    required = {
+        "run_id",
+        "model",
+        "context",
+        "batch",
+        "workload",
+        "metric",
+        "value",
+        "unit",
+    }
+    if not rows or not required.issubset(rows[0]):
+        raise UpstreamError("Spark Bench throughput output schema is incompatible")
+    run_id = rows[-1].get("run_id")
+    selected = [row for row in rows if row.get("run_id") == run_id]
+    if not run_id or any(row.get("model") != model for row in selected):
+        raise UpstreamError("Spark Bench throughput model identity mismatch")
+
+    contexts: dict[int, dict[str, Any]] = {}
+    concurrency: dict[int, dict[str, Any]] = {}
+    errors: list[dict[str, Any]] = []
+    single_fields = {
+        "decode_tps": "generation_tokens_per_second",
+        "prefill_tps": "prefill_tokens_per_second",
+        "ttft_ms": "time_to_first_token_seconds",
+        "output_tokens": "output_tokens",
+        "tpot_ms": "time_per_output_token_seconds",
+    }
+    concurrency_fields = {
+        "agg_decode_tps": "aggregate_generation_tokens_per_second",
+        "per_stream_tps": "per_stream_generation_tokens_per_second",
+        "ttft_p50_ms": "time_to_first_token_p50_seconds",
+        "ttft_p99_ms": "time_to_first_token_p99_seconds",
+    }
+    for row in selected:
+        workload = row.get("workload")
+        metric = row.get("metric")
+        if metric == "error":
+            context_value = (
+                int(row["context"])
+                if row.get("context", "").isdigit()
+                else None
+            )
+            concurrency_value = (
+                int(row["batch"])
+                if row.get("batch", "").isdigit()
+                else None
+            )
+            if workload == "single_stream" and context_value is not None:
+                contexts.setdefault(
+                    context_value,
+                    {
+                        "context_tokens": context_value,
+                        "generation_tokens_per_second": None,
+                        "prefill_tokens_per_second": None,
+                        "time_to_first_token_seconds": None,
+                        "time_per_output_token_seconds": None,
+                        "output_tokens": None,
+                        "token_count_source": None,
+                    },
+                )
+            elif workload == "concurrency" and concurrency_value is not None:
+                concurrency.setdefault(
+                    concurrency_value,
+                    {
+                        "concurrency": concurrency_value,
+                        "aggregate_generation_tokens_per_second": None,
+                        "per_stream_generation_tokens_per_second": None,
+                        "time_to_first_token_p50_seconds": None,
+                        "time_to_first_token_p99_seconds": None,
+                        "token_count_source": None,
+                    },
+                )
+            errors.append(
+                {
+                    "workload": workload,
+                    "context_tokens": context_value,
+                    "concurrency": concurrency_value,
+                    "error": str(row.get("value") or "measurement failed"),
+                }
+            )
+            continue
+        if workload == "single_stream" and metric in single_fields:
+            if not str(row.get("context") or "").isdigit():
+                continue
+            key = int(row["context"])
+            measurement = contexts.setdefault(
+                key,
+                {
+                    "context_tokens": key,
+                    "generation_tokens_per_second": None,
+                    "prefill_tokens_per_second": None,
+                    "time_to_first_token_seconds": None,
+                    "time_per_output_token_seconds": None,
+                    "output_tokens": None,
+                    "token_count_source": None,
+                },
+            )
+            value = _positive_number(row.get("value"))
+            target = single_fields[metric]
+            if target in {
+                "time_to_first_token_seconds",
+                "time_per_output_token_seconds",
+            } and value is not None:
+                value /= 1000
+            if target == "output_tokens" and value is not None:
+                value = int(value)
+            measurement[target] = value
+        elif workload == "concurrency" and metric in concurrency_fields:
+            if not str(row.get("batch") or "").isdigit():
+                continue
+            key = int(row["batch"])
+            measurement = concurrency.setdefault(
+                key,
+                {
+                    "concurrency": key,
+                    "aggregate_generation_tokens_per_second": None,
+                    "per_stream_generation_tokens_per_second": None,
+                    "time_to_first_token_p50_seconds": None,
+                    "time_to_first_token_p99_seconds": None,
+                    "token_count_source": None,
+                },
+            )
+            value = _positive_number(row.get("value"))
+            target = concurrency_fields[metric]
+            if target.startswith("time_to_first_token") and value is not None:
+                value /= 1000
+            measurement[target] = value
+
+    if raw_dump_path is not None:
+        raw_records: list[dict[str, Any]] = []
+        raw_error: str | None = None
+        try:
+            for line in raw_dump_path.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                value = json.loads(line)
+                if not isinstance(value, dict):
+                    raise ValueError("raw dump row is not an object")
+                raw_records.append(value)
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+            raw_error = f"{type(exc).__name__}: native usage evidence unavailable"
+
+        successful_single = [
+            row for row in contexts.values() if row["output_tokens"] is not None
+        ]
+        for index, measurement in enumerate(successful_single):
+            record = raw_records[index] if index < len(raw_records) else {}
+            usage = record.get("usage")
+            usage = usage if isinstance(usage, Mapping) else {}
+            completion = usage.get("completion_tokens")
+            prompt = usage.get("prompt_tokens")
+            native = (
+                type(completion) is int
+                and completion > 0
+                and completion == measurement["output_tokens"]
+                and type(prompt) is int
+                and prompt > 0
+                and prompt == measurement["context_tokens"]
+            )
+            if native:
+                measurement["token_count_source"] = "native_stream_usage"
+            else:
+                measurement["generation_tokens_per_second"] = None
+                measurement["prefill_tokens_per_second"] = None
+                measurement["output_tokens"] = None
+                errors.append(
+                    {
+                        "workload": "single_stream",
+                        "context_tokens": measurement["context_tokens"],
+                        "concurrency": None,
+                        "error": raw_error or "native stream usage did not match tier2 CSV",
+                    }
+                )
+
+        all_raw_usage_native = raw_error is None and bool(raw_records) and all(
+            isinstance(record.get("usage"), Mapping)
+            and type(record["usage"].get("completion_tokens")) is int
+            and record["usage"]["completion_tokens"] > 0
+            for record in raw_records
+        )
+        for measurement in concurrency.values():
+            if all_raw_usage_native:
+                measurement["token_count_source"] = "native_stream_usage"
+            else:
+                measurement["aggregate_generation_tokens_per_second"] = None
+                measurement["per_stream_generation_tokens_per_second"] = None
+                errors.append(
+                    {
+                        "workload": "concurrency",
+                        "context_tokens": None,
+                        "concurrency": measurement["concurrency"],
+                        "error": raw_error or "native stream usage was not available for every completed request",
+                    }
+                )
+
+    valid = [
+        row
+        for row in contexts.values()
+        if row["generation_tokens_per_second"] is not None
+    ]
+    representative = min(valid, key=lambda row: row["context_tokens"]) if valid else None
+    if not valid:
+        status = "UNAVAILABLE"
+    elif errors or any(
+        value is None
+        for row in contexts.values()
+        for value in (
+            row["generation_tokens_per_second"],
+            row["prefill_tokens_per_second"],
+            row["time_to_first_token_seconds"],
+        )
+    ):
+        status = "PARTIAL"
+    else:
+        status = "PASS"
+    return {
+        "status": status,
+        "run_id": run_id,
+        "representative_single_stream": dict(representative) if representative else None,
+        "contexts": {str(key): contexts[key] for key in sorted(contexts)},
+        "concurrency": {str(key): concurrency[key] for key in sorted(concurrency)},
+        "errors": errors,
+        "generation_tokens_per_second_definition": (
+            "SparkBench v6.8 tier2 server-reported native completion_tokens divided "
+            "by elapsed streaming time after first reasoning, content, or tool-call token"
+        ),
     }

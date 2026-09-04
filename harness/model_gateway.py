@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 
 from harness.endpoints import LocalEndpoint, validate_local_openai_endpoint
 from harness.reasoning_policy import (
+    QWEN_ENABLE_THINKING_PROFILE,
     ReasoningPolicy,
     ReasoningPolicyError,
     endpoint_api_mode,
@@ -27,6 +28,7 @@ OPENAI_MODEL_TRANSPORT_CONTRACT = "openai-model-transport-v1"
 MAX_REQUEST_BYTES = 64 * 1024 * 1024
 MAX_JSON_RESPONSE_BYTES = 16 * 1024 * 1024
 MAX_OBSERVATION_BYTES = 64 * 1024 * 1024
+OBSERVER_DRAIN_SECONDS = 5.0
 ALLOWED_PATHS = {
     "/v1/models",
     "/v1/chat/completions",
@@ -36,6 +38,7 @@ ALLOWED_PATHS = {
     "/api/version",
 }
 DS4_ALLOWED_PATHS = {"/v1/models", "/v1/chat/completions"}
+VLLM_ALLOWED_PATHS = {"/v1/models", "/v1/chat/completions"}
 
 
 class ModelGatewayError(RuntimeError):
@@ -87,7 +90,7 @@ def _response_presence(value: Mapping[str, Any]) -> dict[str, Any]:
 def model_transport_contract(runtime: str) -> str:
     if runtime == "ollama":
         return MODEL_TRANSPORT_CONTRACT
-    if runtime == "ds4":
+    if runtime in {"ds4", "vllm"}:
         return OPENAI_MODEL_TRANSPORT_CONTRACT
     raise ModelGatewayError(f"unsupported model runtime: {runtime}")
 
@@ -97,6 +100,8 @@ def allowed_paths(runtime: str) -> set[str]:
         return ALLOWED_PATHS
     if runtime == "ds4":
         return DS4_ALLOWED_PATHS
+    if runtime == "vllm":
+        return VLLM_ALLOWED_PATHS
     raise ModelGatewayError(f"unsupported model runtime: {runtime}")
 
 
@@ -116,6 +121,14 @@ class _ResponseObserver:
         self._buffer = ""
         self._sse_data: list[str] = []
         self._json_body = bytearray()
+        self.http_error_response = False
+
+    def set_http_status(self, status: int) -> None:
+        """Select the response parser from the actual HTTP response status."""
+
+        if self.streaming and not 200 <= status < 300:
+            self.streaming = False
+            self.http_error_response = True
 
     def _merge(self, value: Any) -> None:
         if not isinstance(value, Mapping):
@@ -207,6 +220,25 @@ class _ResponseObserver:
             self.parser_errors.append("unterminated response event exceeds limit")
             self._buffer = ""
 
+    def _result(self, *, downstream_disconnected: bool) -> dict[str, Any]:
+        return {
+            "visible_content_returned": self.visible,
+            "reasoning_content_returned": self.reasoning,
+            "tool_call_returned": self.tools,
+            "visible_reasoning_tag_returned": self.visible_reasoning_tag,
+            "finish_reasons": sorted(self.finish_reasons),
+            "finish_state_returned": bool(self.finish_reasons or self.done_marker),
+            "stream_done_marker": self.done_marker,
+            "http_error_response": self.http_error_response,
+            "downstream_disconnected": downstream_disconnected,
+            "parser_errors": list(dict.fromkeys(self.parser_errors)),
+        }
+
+    def snapshot_downstream_disconnect(self) -> dict[str, Any]:
+        """Record complete events without treating an in-flight fragment as malformed."""
+
+        return self._result(downstream_disconnected=True)
+
     def finish(self) -> dict[str, Any]:
         if self.streaming:
             try:
@@ -223,16 +255,7 @@ class _ResponseObserver:
                 self._merge(json.loads(self._json_body.decode("utf-8")))
             except (UnicodeDecodeError, json.JSONDecodeError):
                 self.parser_errors.append("malformed JSON response body")
-        return {
-            "visible_content_returned": self.visible,
-            "reasoning_content_returned": self.reasoning,
-            "tool_call_returned": self.tools,
-            "visible_reasoning_tag_returned": self.visible_reasoning_tag,
-            "finish_reasons": sorted(self.finish_reasons),
-            "finish_state_returned": bool(self.finish_reasons or self.done_marker),
-            "stream_done_marker": self.done_marker,
-            "parser_errors": list(dict.fromkeys(self.parser_errors)),
-        }
+        return self._result(downstream_disconnected=False)
 
 
 class _GatewayServer(ThreadingHTTPServer):
@@ -301,7 +324,12 @@ class _GatewayHandler(BaseHTTPRequestHandler):
             try:
                 payload = json.loads(body.decode("utf-8"))
                 normalized, metadata = normalize_model_request(
-                    gateway.runtime, api_mode, payload, gateway.policy
+                    gateway.runtime,
+                    api_mode,
+                    payload,
+                    gateway.policy,
+                    gateway.reasoning_control_profile,
+                    gateway.honor_request_reasoning_controls,
                 )
                 body = json.dumps(
                     normalized,
@@ -350,6 +378,8 @@ class _GatewayHandler(BaseHTTPRequestHandler):
             connection.request(self.command, path, body=body or None, headers=headers)
             response = connection.getresponse()
             status = response.status
+            if observer is not None:
+                observer.set_http_status(status)
             self.send_response(response.status, response.reason)
             response_headers = {key.lower(): value for key, value in response.getheaders()}
             content_type = response_headers.get("content-type")
@@ -387,6 +417,19 @@ class _GatewayHandler(BaseHTTPRequestHandler):
                         self.wfile.flush()
                     except (BrokenPipeError, ConnectionResetError):
                         client_open = False
+                        if observer is not None and request_id is not None:
+                            gateway.record_response(
+                                request_id=request_id,
+                                path=path,
+                                status=status,
+                                observation=(
+                                    observer.snapshot_downstream_disconnect()
+                                ),
+                                transport_error=None,
+                            )
+                            response_recorded = True
+                            observer = None
+                            protocol_complete = True
                 if protocol_complete:
                     break
             if (
@@ -431,6 +474,8 @@ class ModelGateway:
         observations_path: Path,
         upstream_timeout: float,
         runtime: str = "ollama",
+        reasoning_control_profile: str | None = None,
+        honor_request_reasoning_controls: bool = False,
     ) -> None:
         self.target = validate_local_openai_endpoint(target_base_url)
         self.policy = policy
@@ -438,8 +483,18 @@ class ModelGateway:
         self.observations_path = observations_path
         self.upstream_timeout = upstream_timeout
         model_transport_contract(runtime)
+        runtime_reasoning_control(
+            runtime,
+            "openai-chat-completions",
+            policy,
+            reasoning_control_profile,
+        )
         self.runtime = runtime
+        self.reasoning_control_profile = reasoning_control_profile
+        self.honor_request_reasoning_controls = honor_request_reasoning_controls
         self._lock = threading.Lock()
+        self._pending_condition = threading.Condition(self._lock)
+        self._pending_request_ids: set[str] = set()
         self._request_counter = 0
         self._server: _GatewayServer | None = None
         self._thread: threading.Thread | None = None
@@ -458,6 +513,10 @@ class ModelGateway:
             "contract": model_transport_contract(self.runtime),
             "reasoning_policy_contract": reasoning_policy_contract(self.runtime),
             "runtime": self.runtime,
+            "reasoning_control_profile": self.reasoning_control_profile,
+            "honor_request_reasoning_controls": (
+                self.honor_request_reasoning_controls
+            ),
             "stage": self.stage,
             "boundary": endpoint.base_url,
             "target": self.target.base_url,
@@ -490,6 +549,7 @@ class ModelGateway:
         with self._lock:
             self._request_counter += 1
             request_id = f"{self.stage}-{self._request_counter}"
+            self._pending_request_ids.add(request_id)
         self._append(
             {
                 "event": "request",
@@ -526,6 +586,9 @@ class ModelGateway:
                 **observation,
             }
         )
+        with self._pending_condition:
+            self._pending_request_ids.discard(request_id)
+            self._pending_condition.notify_all()
 
     def record_observer_error(self, api_mode: str, error: str) -> None:
         self._append(
@@ -558,6 +621,11 @@ class ModelGateway:
         if server is None:
             return
         server.shutdown()
+        with self._pending_condition:
+            self._pending_condition.wait_for(
+                lambda: not self._pending_request_ids,
+                timeout=OBSERVER_DRAIN_SECONDS,
+            )
         server.server_close()
         if thread is not None:
             thread.join(timeout=5)
@@ -637,6 +705,13 @@ def read_model_transport_observations(path: Path) -> dict[str, Any]:
             if isinstance(row.get("requested_reasoning_policy"), str)
         }
     )
+    deployment_policies = sorted(
+        {
+            str(row["deployment_reasoning_policy"])
+            for row in requests
+            if isinstance(row.get("deployment_reasoning_policy"), str)
+        }
+    )
     invalid_contract_rows = 0
     for row in requests + responses + observer_errors:
         runtime = str(row.get("runtime") or "ollama")
@@ -655,7 +730,12 @@ def read_model_transport_observations(path: Path) -> dict[str, Any]:
                     str(row["requested_reasoning_policy"])
                 )
                 api_mode = str(row["api_mode"])
-                control = runtime_reasoning_control(runtime, api_mode, policy)
+                control = runtime_reasoning_control(
+                    runtime,
+                    api_mode,
+                    policy,
+                    row.get("reasoning_control_profile"),
+                )
                 field = next(iter(control), None)
             except (KeyError, ReasoningPolicyError):
                 invalid = True
@@ -674,9 +754,66 @@ def read_model_transport_observations(path: Path) -> dict[str, Any]:
                         not isinstance(row.get("conflicting_fields_removed"), list),
                     )
                 )
+                if runtime == "vllm":
+                    deployment_policy = row.get("deployment_reasoning_policy")
+                    source = row.get("request_reasoning_policy_source")
+                    signal_fields = row.get("request_reasoning_signal_fields")
+                    honor_request_controls = row.get(
+                        "honor_request_reasoning_controls"
+                    )
+                    invalid = invalid or any(
+                        (
+                            deployment_policy not in {"off", "native"},
+                            source not in {
+                                "deployment-policy",
+                                "request-control",
+                            },
+                            not isinstance(signal_fields, list),
+                            type(honor_request_controls) is not bool,
+                            source == "deployment-policy"
+                            and policy.value != deployment_policy,
+                            source == "request-control"
+                            and (
+                                deployment_policy not in {"native", "off"}
+                                or (
+                                    deployment_policy == "off"
+                                    and honor_request_controls is not True
+                                )
+                                or policy.value not in {"off", "native"}
+                                or not signal_fields
+                            ),
+                        )
+                    )
+        elif row.get("event") == "response":
+            downstream_disconnected = row.get("downstream_disconnected")
+            status_code = row.get("status_code")
+            invalid = invalid or any(
+                (
+                    type(status_code) is not int,
+                    type(status_code) is int
+                    and not 100 <= status_code <= 599,
+                    downstream_disconnected is not None
+                    and type(downstream_disconnected) is not bool,
+                )
+            )
         invalid_contract_rows += int(invalid)
+    mixed_request_policies_allowed = bool(requests) and all(
+        row.get("runtime") == "vllm"
+        and row.get("reasoning_control_profile")
+        == QWEN_ENABLE_THINKING_PROFILE
+        and row.get("deployment_reasoning_policy") in {"native", "off"}
+        and (
+            row.get("deployment_reasoning_policy") == "native"
+            or row.get("honor_request_reasoning_controls") is True
+        )
+        and row.get("requested_reasoning_policy") in {"off", "native"}
+        and row.get("request_reasoning_policy_source")
+        in {"deployment-policy", "request-control"}
+        for row in requests
+    )
     policy_inconsistent = bool(requests) and (
-        len(policies) != 1
+        (len(policies) != 1 and not mixed_request_policies_allowed)
+        or len(deployment_policies) > 1
         or sum(
             isinstance(row.get("requested_reasoning_policy"), str)
             for row in requests
@@ -718,7 +855,11 @@ def read_model_transport_observations(path: Path) -> dict[str, Any]:
             else None
         ),
         "runtime": runtime,
+        "deployment_reasoning_policy": (
+            deployment_policies[0] if len(deployment_policies) == 1 else None
+        ),
         "requested_reasoning_policy": policies[0] if len(policies) == 1 else None,
+        "requested_reasoning_policies": policies,
         "request_count": len(requests),
         "response_count": len(responses),
         "requests": requests,
@@ -749,6 +890,12 @@ def read_model_transport_observations(path: Path) -> dict[str, Any]:
         ),
         "response_completed_count": sum(
             row.get("finish_state_returned") is True for row in responses
+        ),
+        "http_error_response_count": sum(
+            row.get("http_error_response") is True for row in responses
+        ),
+        "downstream_disconnected_count": sum(
+            row.get("downstream_disconnected") is True for row in responses
         ),
         "malformed_row_count": malformed_rows,
         "unknown_event_row_count": unknown_event_rows,

@@ -4,10 +4,10 @@ Canonical repository: <https://github.com/TomkoLabs/LLM-Model-Benchmarks>
 
 ## Active qualification generation
 
-The repository-root `./benchmark-model` interface implements
-`gx10-qualification-v4`: a thin orchestrator over pinned Spark Bench,
+The repository-root `./benchmark-model` interface defaults to
+`gx10-qualification-v5`: a thin orchestrator over pinned Spark Bench,
 BenchLocal CLI, Infermark, and the retained local Hermes acceptance path.
-`upstreams.lock.json`, `configs/qualification-v4.yaml`, `models.yaml`, the
+`upstreams-v5.lock.json`, `configs/qualification-v5.yaml`, `models.yaml`, the
 schemas, and task manifests are authoritative. Upstream tools execute only from
 clean exact-commit external checkouts, through array-based adapters, and their
 structured outputs are copied into ignored run-owned artifact directories.
@@ -17,13 +17,13 @@ the local acceptance component. `hermesbench-v3` scores are component evidence,
 not the complete deployment decision; `SCORING.md` defines the outer hard gates
 and 40/30/15/10/5 aggregate.
 
-Generation v4 retains v3's exclusion of Docker-only BenchLocal packs from the default profiles
+Generation v5 retains v4's exclusion of Docker-only BenchLocal packs from the default profiles
 because the `llm` account has no Docker daemon access and Aider Polyglot's
 upstream container requires a non-isolated network. It also fails the
 BenchLocal component when the upstream result reports thinking contamination
 and enforces the profile total wall across successive components.
 
-Generation v4 makes reasoning an explicit deployment configuration and
+Generation v5 retains v4's explicit deployment reasoning configuration and
 separates policy, model transport, and agent-execution evidence. One trusted
 loopback gateway normalizes OpenAI-compatible and native Ollama requests,
 removes conflicting legacy controls, forwards only to the configured local
@@ -38,14 +38,38 @@ The exact reasoning policy is `off`, `native`, or one curated supported
 as the requested selection source and resolves the explicit `reasoning_policy`
 in `models.yaml`. Unsupported model/policy combinations fail preflight. No
 inference probes or aliases are used to guess a maximum effort.
-`off` serializes `reasoning_effort: none` for OpenAI compatibility and
-`think: false` for native Ollama; `native` omits a forcing control; effort mode
-serializes the exact named level. The requested selection is also immutable
+`off` serializes the runtime's declared exact control: `reasoning_effort: none`
+for generic OpenAI compatibility, `think: false` for native Ollama, and
+`chat_template_kwargs.enable_thinking: false` for the curated Qwen vLLM
+profile. `native` omits a forcing control; effort mode serializes the exact
+named level only for curated deployments that declare it. The requested selection is also immutable
 provenance: `configured` places the resolved per-model policy in the primary
 deployment track, while an explicit policy places the run in that exact
 controlled-policy cohort. Primary-track deployments remain comparable even
-when their curated effective policies differ. Generations v1 through v3 remain
-frozen for historical runs.
+when their curated effective policies differ. Generations v1 through v4 remain
+frozen for historical runs. V4 continues to use `configs/qualification-v4.yaml`
+and `upstreams.lock.json`; `--qualification-generation gx10-qualification-v4`
+selects those exact files for replay.
+
+For a configured deployment whose declared runtime profile supports an exact
+request-level switch, pinned benchmark clients may select `native` or `off` per
+request. The gateway consumes the provider-generic signal, records the fixed
+deployment policy and effective request policy separately, removes incompatible
+provider fields, and emits only the runtime's canonical control. A whole-run
+explicit `--reasoning-policy off` selection remains authoritative and cannot be
+enabled by a request. This distinction lets the current Qwen thinking-off
+deployment still satisfy methodology-defined mixed BenchLocal requests.
+
+V5 standard pins SparkBench commit
+`125ba161d9a91b705ff0cbb22471ac2914d9dea8` and methodology
+`v6.8.0-full-uncapped`: tier all (76 scenarios across 12 domains), two repeats,
+temperature 0.3, thinking off, uncapped output, and timeout 0/no client request
+timeout. Its quality command includes `--skip-throughput`; tier2 is a separate,
+optional invocation with contexts 1024/8192/32768, concurrency 1/2/4/8, 512
+generation tokens, and a positive 900-second request timeout. A post-quality
+performance transport failure therefore cannot destroy valid quality evidence.
+Smoke still has no Spark phase. Overnight uses the v6.8 contract with three
+repeats and otherwise retains the larger stability workload.
 
 ## 1. Objective
 
@@ -141,8 +165,15 @@ The Ollama adapter discovers identity through `/v1/models`, `/api/tags`, and
 `/api/show`. The DS4 adapter is OpenAI-compatible and is restricted to
 `/v1/models` and `/v1/chat/completions`; its immutable deployment provenance is
 the exact model identifier plus the curated DS4 version, configured context,
-base GGUF checksum, DSpark drafter checksum and enabled state. Runtime adapters
-do not change tasks, scoring, gates, or the `gx10-qualification-v4`
+base GGUF checksum, DSpark drafter checksum and enabled state. The vLLM adapter
+has the same OpenAI-only path boundary. Its immutable
+provenance records the exact checkpoint and revision plus serving implementation
+and revision. Since `/v1/models` supplies no weight checksum, its
+`runtime_digest` is explicitly the SHA-256 of the versioned canonical
+deployment-provenance descriptor and is never represented as a weight digest.
+Preflight recomputes it, exactly matches the runtime model ID, and verifies
+`max_model_len` against the curated context. Runtime adapters
+do not change tasks, scoring, gates, or the qualification-generation
 compatibility key.
 
 Changing reasoning policy, quantization, or context creates a distinct complete
@@ -175,10 +206,42 @@ invalid, incomplete, and infrastructure-error runs remain unranked; repeated
 trials remain separate. Per-file writes use the harness atomic artifact writer,
 and no generated output is committed or pushed automatically.
 
+Pinned Infermark 0.3.0 has different streaming and non-streaming throughput
+semantics. In the configured streaming workload, its variable named
+`output_tokens` counts non-empty `delta.content` events, not tokenizer tokens;
+`delta.reasoning_content` is not counted. `tokens_per_second` is the sum of
+those successful visible-content chunks divided by the concurrency-level wall
+duration. TTFT is request start to first non-empty visible-content chunk, and
+ITL values are arrival intervals between subsequent non-empty visible-content
+chunks, pooled across successful requests. Streaming chunks are not guaranteed
+to map one-to-one to model tokens and the request does not enable usage
+reporting. Consequently the harness preserves the legacy metric for scoring
+compatibility, exposes it under the accurate
+`visible_output_chunks_per_second_c1` alias, and leaves
+`generation_tokens_per_second_c1` null.
+
+For display only, the harness derives
+`estimated_visible_generation_chunks_per_second_c1 = 1 / mean ITL` when the
+mean is finite and positive. This estimates visible stream-event cadence, not
+tokenizer decode rate. It excludes hidden reasoning-content generation and is
+therefore especially important not to label as token/s for reasoning models.
+Non-streaming Infermark instead uses server-reported completion-token usage,
+but still divides by whole benchmark wall duration and thus does not isolate
+decode time. No Infermark prefill throughput is derived without verified
+prompt-token counts and a separate prefill duration. SparkBench v6.8 tier2
+separately reports actual completion-token decode rate, prompt-token/TTFT
+prefill rate, and TTFT. The harness chooses the shortest valid single-stream
+prompt context as the representative Generation tok/s row and retains all
+per-context and concurrency measurements. Error rows have null measurements
+and explicit error text, never fabricated zeroes. Comparison regeneration enriches old
+results in memory from their preserved raw metrics and never rewrites their
+`results.json` evidence.
+
 Generation-v2 results are retained as historical diagnostics under the explicit
 `LEGACY_THINKING_CONTROL_MISMATCH` label. Because v2 did not uniformly serialize
-Ollama's supported thinking control, no v2 score enters the v4 current ranking,
-including results from models that happened not to return reasoning.
+Ollama's supported thinking control, no v2 score enters the current ranking,
+including results from models that happened not to return reasoning. V3 and v4
+are visible historical cohorts under a v5 leaderboard and are never co-ranked.
 
 Direct response and tool probes classify exact visible output, exact tool calls,
 reasoning-only output, empty output, output-limit truncation, malformed tool
@@ -330,21 +393,13 @@ are also evaluated from the immutable harness copy, and any candidate public
 test or task-prompt modification is separately reported as input-integrity and
 requirement loss.
 
-Evaluator implementations, case contracts, and hashes are public
-reproducibility material, including sources stored under `private_tests/`.
-That name describes the runtime boundary: these files are withheld from and
-inaccessible to the candidate process during execution. It does not claim that
-the source is confidential or unavailable to repository readers. Merely
-placing tests in another directory owned by the same Unix user would not
-provide the required runtime isolation.
+Important: merely placing tests in another directory owned by the same Unix
+user is not strong secrecy. Before hidden-test scores are considered robust,
+the runner must provide process/filesystem isolation that prevents the agent
+from reading harness-only test material.
 
-Publication also means evaluator content may enter future model training data.
-These results qualify a deployment; they do not prove absence of benchmark
-contamination. Operators should retain unpublished real-work tasks and use
-representative repository work as the final selection step.
-
-The nested boundary prevents candidate Python from reading or copying evaluator
-tests at runtime, accessing the result descriptor, writing the candidate, or using
+The nested boundary prevents candidate Python from reading or copying private
+tests, accessing the result descriptor, writing the candidate, or using
 network egress. A candidate process exit, malformed/forged RPC response, or
 import failure becomes a model case error and cannot produce a pass or a
 harness-owned result envelope.
@@ -355,19 +410,22 @@ never exposed. Symlinked parents or destinations fail closed.
 
 ## 6.1 Runtime identity and live-run gate
 
-Live execution resolves a full `sha256:` digest for the selected model tag at
-run time. `models.yaml` is a curated override registry, not an execution
-allowlist. Preflight checks exactly one matching ID through `/v1/models`,
-exactly one matching name/digest through `/api/tags`, and a successful read-only
-`/api/show` lookup. An unconfigured tag receives an in-memory model configuration
+Live execution resolves a full `sha256:` immutable identity for the selected
+deployment. For Ollama this is the runtime-reported model digest. For DS4 it is
+the verified base GGUF checksum. For vLLM it is the explicitly typed canonical
+deployment-provenance digest described above. `models.yaml` is a curated
+override registry, not an execution allowlist. Ollama preflight checks exactly
+one matching ID through `/v1/models`, exactly one matching name/digest through
+`/api/tags`, and a successful read-only `/api/show` lookup. An unconfigured tag receives an in-memory model configuration
 only when `/api/show` parameters or Modelfile metadata supplies one unambiguous
 effective `num_ctx`; native maximum context is recorded separately and is never
 substituted for that execution value. Runtime-reported architecture, parameter
 size, and quantization are recorded with their sources.
 
-Malformed, missing, ambiguous, or inconsistent identifiers fail closed. If a
-curated alias config supplies `runtime_digest`, it is an optional expected value
-and must equal the resolved digest. Redirects are rejected. A dry run does not
+DS4 and vLLM use curated immutable provenance and exact `/v1/models` matches;
+vLLM additionally requires the reported context. Malformed, missing, ambiguous,
+or inconsistent identifiers fail closed. If a curated alias config supplies
+`runtime_digest`, it must equal the resolved or recomputed identity. Redirects are rejected. A dry run does not
 contact GX10 and reports unconfigured-tag discovery as pending. The resolved
 digest is written to the aggregate, launch manifest, task result, and smoke
 result. Identity is re-resolved after each task; a digest change or loss of
